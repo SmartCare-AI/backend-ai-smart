@@ -26,6 +26,16 @@ const BCRYPT_ROUNDS = 12;
 const OTP_TTL_MS = 10 * 60 * 1000; // 10 minutes
 const OTP_MAX_ATTEMPTS = 5;
 
+const KNOWN_PLATFORMS = new Set(['ios', 'android', 'web']);
+
+/** Client metadata recorded on each session (refresh token). */
+export interface SessionMeta {
+  userAgent?: string;
+  ip?: string;
+  /** From the optional X-Platform header — informational only. */
+  platform?: string;
+}
+
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
@@ -115,10 +125,7 @@ export class AuthService {
   // Login / logout / refresh
   // -------------------------------------------------------------------------
 
-  async login(
-    dto: LoginDto,
-    meta?: { userAgent?: string; ip?: string },
-  ): Promise<AuthResponseEntity> {
+  async login(dto: LoginDto, meta?: SessionMeta): Promise<AuthResponseEntity> {
     const user = await this.prisma.user.findUnique({
       where: { email: dto.email.toLowerCase() },
     });
@@ -145,7 +152,7 @@ export class AuthService {
 
   async refreshTokens(
     refreshToken: string,
-    meta?: { userAgent?: string; ip?: string },
+    meta?: SessionMeta,
   ): Promise<AuthResponseEntity> {
     const tokenHash = this.sha256(refreshToken);
     const stored = await this.prisma.refreshToken.findUnique({
@@ -223,7 +230,7 @@ export class AuthService {
 
   async firebaseLogin(
     dto: FirebaseLoginDto,
-    meta?: { userAgent?: string; ip?: string },
+    meta?: SessionMeta,
   ): Promise<AuthResponseEntity> {
     const decoded = await this.firebase.verifyIdToken(dto.idToken);
 
@@ -288,7 +295,7 @@ export class AuthService {
 
   private async buildAuthResponse(
     user: User,
-    meta?: { userAgent?: string; ip?: string },
+    meta?: SessionMeta,
   ): Promise<AuthResponseEntity> {
     const accessToken = await this.jwt.signAsync({
       sub: user.id,
@@ -306,6 +313,7 @@ export class AuthService {
         expiresAt: new Date(Date.now() + refreshTtlDays * 24 * 60 * 60 * 1000),
         userAgent: meta?.userAgent?.slice(0, 255) ?? null,
         ip: meta?.ip ?? null,
+        platform: this.normalizePlatform(meta?.platform),
       },
     });
 
@@ -386,6 +394,12 @@ export class AuthService {
       );
     }
     return user;
+  }
+
+  /** Unknown or missing values become null — the header is never trusted. */
+  private normalizePlatform(value?: string): string | null {
+    const normalized = value?.trim().toLowerCase();
+    return normalized && KNOWN_PLATFORMS.has(normalized) ? normalized : null;
   }
 
   private sha256(value: string): string {

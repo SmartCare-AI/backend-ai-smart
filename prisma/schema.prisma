@@ -122,6 +122,9 @@ model RefreshToken {
   revokedAt DateTime?
   userAgent String?
   ip        String?
+  /// Client platform (ios | android | web) from the optional X-Platform
+  /// header. Metadata only — never trusted for authorization.
+  platform  String?
   createdAt DateTime  @default(now())
 
   @@index([userId])

@@ -9,6 +9,7 @@ import {
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
+  ApiHeader,
   ApiOperation,
   ApiResponse,
   ApiTags,
@@ -33,6 +34,16 @@ import { AuthResponseEntity } from './entities/auth-response.entity';
 // Stricter limits for endpoints that send emails or accept credentials.
 const STRICT = { default: { limit: 5, ttl: 60_000 } };
 const EMAIL_SENDING = { default: { limit: 3, ttl: 60_000 } };
+
+// Optional session metadata — recorded on the refresh token, never trusted
+// for authorization (any client can send any value).
+const PLATFORM_HEADER = {
+  name: 'X-Platform',
+  required: false,
+  enum: ['ios', 'android', 'web'],
+  description:
+    'Optional: which client the session belongs to. Stored as session metadata (device overview / future "log out this device" feature).',
+} as const;
 
 @ApiTags('Auth')
 @ApiTooManyRequestsResponse({ description: 'Rate limit exceeded.' })
@@ -92,15 +103,17 @@ export class AuthController {
     description:
       'Returns an access token (15 min) and a rotating refresh token (7 days). Requires a verified email.',
   })
+  @ApiHeader(PLATFORM_HEADER)
   @ApiResponse({ status: 200, type: AuthResponseEntity })
   @ApiResponse({ status: 401, description: 'Invalid credentials.' })
   @ApiResponse({ status: 403, description: 'Email not verified or account deactivated.' })
   login(
     @Body() dto: LoginDto,
     @Headers('user-agent') userAgent?: string,
+    @Headers('x-platform') platform?: string,
     @Ip() ip?: string,
   ) {
-    return this.authService.login(dto, { userAgent, ip });
+    return this.authService.login(dto, { userAgent, ip, platform });
   }
 
   @Public()
@@ -112,15 +125,17 @@ export class AuthController {
     description:
       'The mobile app signs in with Google/Apple through Firebase Auth, then sends the Firebase ID token here. The server verifies it, creates or links the account, and returns SmartCare tokens. Social emails are treated as verified.',
   })
+  @ApiHeader(PLATFORM_HEADER)
   @ApiResponse({ status: 200, type: AuthResponseEntity })
   @ApiResponse({ status: 401, description: 'Invalid or expired Firebase ID token.' })
   @ApiResponse({ status: 503, description: 'Firebase is not configured on the server.' })
   firebaseLogin(
     @Body() dto: FirebaseLoginDto,
     @Headers('user-agent') userAgent?: string,
+    @Headers('x-platform') platform?: string,
     @Ip() ip?: string,
   ) {
-    return this.authService.firebaseLogin(dto, { userAgent, ip });
+    return this.authService.firebaseLogin(dto, { userAgent, ip, platform });
   }
 
   @Public()
@@ -132,14 +147,20 @@ export class AuthController {
     description:
       'Exchanges a valid refresh token for a new access + refresh pair. Refresh tokens are single-use (rotation): the submitted token is revoked.',
   })
+  @ApiHeader(PLATFORM_HEADER)
   @ApiResponse({ status: 200, type: AuthResponseEntity })
   @ApiResponse({ status: 401, description: 'Invalid, expired, or already-used refresh token.' })
   refresh(
     @Body() dto: RefreshTokenDto,
     @Headers('user-agent') userAgent?: string,
+    @Headers('x-platform') platform?: string,
     @Ip() ip?: string,
   ) {
-    return this.authService.refreshTokens(dto.refreshToken, { userAgent, ip });
+    return this.authService.refreshTokens(dto.refreshToken, {
+      userAgent,
+      ip,
+      platform,
+    });
   }
 
   @ApiBearerAuth('access-token')
