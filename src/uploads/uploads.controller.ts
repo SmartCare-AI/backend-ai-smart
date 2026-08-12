@@ -20,10 +20,8 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
-import {
-  AuthenticatedUser,
-  CurrentUser,
-} from '../common/decorators/current-user.decorator';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
+import type { AuthenticatedUser } from '../common/decorators/current-user.decorator';
 import { UploadFileDto } from './dto/upload-file.dto';
 import { FileEntity } from './entities/file.entity';
 import { MAX_FILE_SIZE, UploadsService } from './uploads.service';

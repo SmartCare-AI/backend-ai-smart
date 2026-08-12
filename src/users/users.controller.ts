@@ -18,10 +18,8 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
-import {
-  AuthenticatedUser,
-  CurrentUser,
-} from '../common/decorators/current-user.decorator';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
+import type { AuthenticatedUser } from '../common/decorators/current-user.decorator';
 import { MessageResponseDto } from '../common/dto/message-response.dto';
 import { MAX_AVATAR_SIZE } from '../uploads/uploads.service';
 import { ChangePasswordDto } from './dto/change-password.dto';

@@ -10,10 +10,8 @@ import { randomUUID } from 'crypto';
 import { extname } from 'path';
 import { PrismaService } from '../prisma/prisma.service';
 import { FileEntity } from './entities/file.entity';
-import {
-  STORAGE_PROVIDER,
-  StorageProvider,
-} from './storage/storage-provider.interface';
+import { STORAGE_PROVIDER } from './storage/storage-provider.interface';
+import type { StorageProvider } from './storage/storage-provider.interface';
 
 export const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 export const MAX_AVATAR_SIZE = 5 * 1024 * 1024; // 5 MB

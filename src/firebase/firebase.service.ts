@@ -6,7 +6,10 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import * as admin from 'firebase-admin';
+import { cert, initializeApp } from 'firebase-admin/app';
+import type { App } from 'firebase-admin/app';
+import { getAuth } from 'firebase-admin/auth';
+import type { DecodedIdToken } from 'firebase-admin/auth';
 
 /**
  * Thin wrapper around the Firebase Admin SDK.
@@ -16,7 +19,7 @@ import * as admin from 'firebase-admin';
 @Injectable()
 export class FirebaseService implements OnModuleInit {
   private readonly logger = new Logger(FirebaseService.name);
-  private app?: admin.app.App;
+  private app?: App;
 
   constructor(private readonly config: ConfigService) {}
 
@@ -35,8 +38,8 @@ export class FirebaseService implements OnModuleInit {
       return;
     }
 
-    this.app = admin.initializeApp({
-      credential: admin.credential.cert({ projectId, clientEmail, privateKey }),
+    this.app = initializeApp({
+      credential: cert({ projectId, clientEmail, privateKey }),
     });
     this.logger.log(`Firebase Admin initialized for project "${projectId}"`);
   }
@@ -45,14 +48,14 @@ export class FirebaseService implements OnModuleInit {
     return !!this.app;
   }
 
-  async verifyIdToken(idToken: string): Promise<admin.auth.DecodedIdToken> {
+  async verifyIdToken(idToken: string): Promise<DecodedIdToken> {
     if (!this.app) {
       throw new ServiceUnavailableException(
         'Social sign-in is not configured on this server yet (missing Firebase credentials).',
       );
     }
     try {
-      return await this.app.auth().verifyIdToken(idToken);
+      return await getAuth(this.app).verifyIdToken(idToken);
     } catch {
       throw new UnauthorizedException('Invalid or expired Firebase ID token.');
     }
