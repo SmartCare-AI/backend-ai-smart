@@ -5,8 +5,8 @@ import { AuthProvider, Gender, Role, User } from '@prisma/client';
  * Public representation of a user — never exposes the password hash.
  */
 export class UserEntity {
-  @ApiProperty({ example: '4f9d3b2a-1c8e-4a7b-9f0d-2e5c6a8b7d41' })
-  id!: string;
+  @ApiProperty({ example: 1 })
+  id!: number;
 
   @ApiProperty({ example: 'patient@example.com' })
   email!: string;

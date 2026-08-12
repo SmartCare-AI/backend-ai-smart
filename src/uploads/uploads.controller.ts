@@ -6,7 +6,7 @@ import {
   HttpCode,
   HttpStatus,
   Param,
-  ParseUUIDPipe,
+  ParseIntPipe,
   Post,
   UploadedFile,
   UseInterceptors,
@@ -60,7 +60,7 @@ export class UploadsController {
   @ApiResponse({ status: 404, description: 'File not found.' })
   findOne(
     @CurrentUser() user: AuthenticatedUser,
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param('id', ParseIntPipe) id: number,
   ) {
     return this.uploadsService.findOwned(id, user.id);
   }
@@ -76,7 +76,7 @@ export class UploadsController {
   @ApiResponse({ status: 404, description: 'File not found.' })
   async remove(
     @CurrentUser() user: AuthenticatedUser,
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param('id', ParseIntPipe) id: number,
   ) {
     await this.uploadsService.remove(id, user.id);
   }

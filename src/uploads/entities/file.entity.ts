@@ -3,10 +3,10 @@ import { FileObject, FilePurpose } from '@prisma/client';
 
 export class FileEntity {
   @ApiProperty({
-    example: '7c2e1f4a-9b3d-4e8c-a1f5-6d0b2c9e8a73',
+    example: 1,
     description: 'File id — reference this from other resources (e.g. avatar).',
   })
-  id!: string;
+  id!: number;
 
   @ApiProperty({
     example: 'http://localhost:3000/files/avatar/4f9d.../7c2e....png',

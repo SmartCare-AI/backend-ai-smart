@@ -41,7 +41,7 @@ export class UploadsService {
 
   async upload(
     file: Express.Multer.File,
-    ownerId: string,
+    ownerId: number,
     purpose: FilePurpose = FilePurpose.OTHER,
   ): Promise<FileEntity> {
     this.validate(file, purpose);
@@ -62,12 +62,12 @@ export class UploadsService {
     return FileEntity.fromFile(record);
   }
 
-  async findOwned(fileId: string, ownerId: string): Promise<FileEntity> {
+  async findOwned(fileId: number, ownerId: number): Promise<FileEntity> {
     const file = await this.getOwnedOrThrow(fileId, ownerId);
     return FileEntity.fromFile(file);
   }
 
-  async remove(fileId: string, ownerId: string): Promise<void> {
+  async remove(fileId: number, ownerId: number): Promise<void> {
     const file = await this.getOwnedOrThrow(fileId, ownerId);
     await this.storage.delete(file.key);
     await this.prisma.fileObject.delete({ where: { id: file.id } });
@@ -75,7 +75,7 @@ export class UploadsService {
 
   // -------------------------------------------------------------------------
 
-  private async getOwnedOrThrow(fileId: string, ownerId: string) {
+  private async getOwnedOrThrow(fileId: number, ownerId: number) {
     const file = await this.prisma.fileObject.findUnique({
       where: { id: fileId },
     });

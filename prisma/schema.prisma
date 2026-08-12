@@ -50,7 +50,7 @@ enum FilePurpose {
 // ---------------------------------------------------------------------------
 
 model User {
-  id              String       @id @default(uuid())
+  id              Int          @id @default(autoincrement())
   email           String       @unique
   /// Null for social-login accounts (Google / Apple)
   password        String?
@@ -79,8 +79,8 @@ model User {
 /// Files uploaded to object storage (Cloudflare R2).
 /// The DB row is the source of truth; `key` locates the object in the bucket.
 model FileObject {
-  id        String      @id @default(uuid())
-  ownerId   String
+  id        Int         @id @default(autoincrement())
+  ownerId   Int
   owner     User        @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   /// Object key inside the R2 bucket, e.g. "avatar/<userId>/<uuid>.png"
   key       String      @unique
@@ -97,8 +97,8 @@ model FileObject {
 /// One-time codes for email verification and password reset.
 /// Only the SHA-256 hash of the code is stored.
 model OtpCode {
-  id         String    @id @default(uuid())
-  userId     String
+  id         Int       @id @default(autoincrement())
+  userId     Int
   user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   codeHash   String
   type       OtpType
@@ -114,8 +114,8 @@ model OtpCode {
 
 /// Rotating refresh tokens. Only the SHA-256 hash is stored.
 model RefreshToken {
-  id        String    @id @default(uuid())
-  userId    String
+  id        Int       @id @default(autoincrement())
+  userId    Int
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   tokenHash String    @unique
   expiresAt DateTime

@@ -21,14 +21,14 @@ export class UsersService {
     private readonly uploads: UploadsService,
   ) {}
 
-  async getProfile(userId: string): Promise<UserEntity> {
+  async getProfile(userId: number): Promise<UserEntity> {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) throw new NotFoundException('User not found.');
     return UserEntity.fromUser(user);
   }
 
   async updateProfile(
-    userId: string,
+    userId: number,
     dto: UpdateProfileDto,
   ): Promise<UserEntity> {
     const user = await this.prisma.user.update({
@@ -51,7 +51,7 @@ export class UsersService {
    * and points the profile at the new file's public URL.
    */
   async updateAvatar(
-    userId: string,
+    userId: number,
     file: Express.Multer.File,
   ): Promise<UserEntity> {
     const uploaded = await this.uploads.upload(
@@ -67,7 +67,7 @@ export class UsersService {
   }
 
   async changePassword(
-    userId: string,
+    userId: number,
     dto: ChangePasswordDto,
   ): Promise<{ message: string }> {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });

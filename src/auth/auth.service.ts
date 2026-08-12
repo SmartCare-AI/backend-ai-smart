@@ -175,7 +175,7 @@ export class AuthService {
     return this.buildAuthResponse(stored.user, meta);
   }
 
-  async logout(userId: string, refreshToken: string): Promise<{ message: string }> {
+  async logout(userId: number, refreshToken: string): Promise<{ message: string }> {
     await this.prisma.refreshToken.updateMany({
       where: { userId, tokenHash: this.sha256(refreshToken), revokedAt: null },
       data: { revokedAt: new Date() },
@@ -350,7 +350,7 @@ export class AuthService {
 
   /** Validates a code and marks it consumed; throws on any failure. */
   private async consumeOtp(
-    userId: string,
+    userId: number,
     type: OtpType,
     code: string,
   ): Promise<void> {

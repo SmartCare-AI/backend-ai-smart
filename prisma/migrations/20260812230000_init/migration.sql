@@ -18,7 +18,7 @@ CREATE TYPE "FilePurpose" AS ENUM ('AVATAR', 'MEDICAL_REPORT', 'LAB_RESULT', 'RA
 
 -- CreateTable
 CREATE TABLE "users" (
-    "id" TEXT NOT NULL,
+    "id" SERIAL NOT NULL,
     "email" TEXT NOT NULL,
     "password" TEXT,
     "firstName" TEXT NOT NULL,
@@ -40,8 +40,8 @@ CREATE TABLE "users" (
 
 -- CreateTable
 CREATE TABLE "file_objects" (
-    "id" TEXT NOT NULL,
-    "ownerId" TEXT NOT NULL,
+    "id" SERIAL NOT NULL,
+    "ownerId" INTEGER NOT NULL,
     "key" TEXT NOT NULL,
     "url" TEXT NOT NULL,
     "mimeType" TEXT NOT NULL,
@@ -54,8 +54,8 @@ CREATE TABLE "file_objects" (
 
 -- CreateTable
 CREATE TABLE "otp_codes" (
-    "id" TEXT NOT NULL,
-    "userId" TEXT NOT NULL,
+    "id" SERIAL NOT NULL,
+    "userId" INTEGER NOT NULL,
     "codeHash" TEXT NOT NULL,
     "type" "OtpType" NOT NULL,
     "expiresAt" TIMESTAMP(3) NOT NULL,
@@ -68,13 +68,14 @@ CREATE TABLE "otp_codes" (
 
 -- CreateTable
 CREATE TABLE "refresh_tokens" (
-    "id" TEXT NOT NULL,
-    "userId" TEXT NOT NULL,
+    "id" SERIAL NOT NULL,
+    "userId" INTEGER NOT NULL,
     "tokenHash" TEXT NOT NULL,
     "expiresAt" TIMESTAMP(3) NOT NULL,
     "revokedAt" TIMESTAMP(3),
     "userAgent" TEXT,
     "ip" TEXT,
+    "platform" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "refresh_tokens_pkey" PRIMARY KEY ("id")
