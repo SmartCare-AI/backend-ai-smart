@@ -1,0 +1,129 @@
+// SmartCare AI - Database Schema
+// PostgreSQL + Prisma ORM
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum Role {
+  PATIENT
+  DOCTOR
+  HOSPITAL_ADMIN
+  ADMIN
+}
+
+enum AuthProvider {
+  EMAIL
+  GOOGLE
+  APPLE
+}
+
+enum Gender {
+  MALE
+  FEMALE
+}
+
+enum OtpType {
+  EMAIL_VERIFICATION
+  PASSWORD_RESET
+}
+
+enum FilePurpose {
+  AVATAR
+  MEDICAL_REPORT
+  LAB_RESULT
+  RADIOLOGY
+  OTHER
+}
+
+// ---------------------------------------------------------------------------
+// Models
+// ---------------------------------------------------------------------------
+
+model User {
+  id              String       @id @default(uuid())
+  email           String       @unique
+  /// Null for social-login accounts (Google / Apple)
+  password        String?
+  firstName       String
+  lastName        String
+  phone           String?
+  dateOfBirth     DateTime?
+  gender          Gender?
+  avatarUrl       String?
+  role            Role         @default(PATIENT)
+  provider        AuthProvider @default(EMAIL)
+  /// Firebase UID for Google / Apple sign-in accounts
+  firebaseUid     String?      @unique
+  isEmailVerified Boolean      @default(false)
+  isActive        Boolean      @default(true)
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  otpCodes      OtpCode[]
+  refreshTokens RefreshToken[]
+  files         FileObject[]
+
+  @@map("users")
+}
+
+/// Files uploaded to object storage (Cloudflare R2).
+/// The DB row is the source of truth; `key` locates the object in the bucket.
+model FileObject {
+  id        String      @id @default(uuid())
+  ownerId   String
+  owner     User        @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  /// Object key inside the R2 bucket, e.g. "avatar/<userId>/<uuid>.png"
+  key       String      @unique
+  url       String
+  mimeType  String
+  size      Int
+  purpose   FilePurpose @default(OTHER)
+  createdAt DateTime    @default(now())
+
+  @@index([ownerId])
+  @@map("file_objects")
+}
+
+/// One-time codes for email verification and password reset.
+/// Only the SHA-256 hash of the code is stored.
+model OtpCode {
+  id         String    @id @default(uuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  codeHash   String
+  type       OtpType
+  expiresAt  DateTime
+  consumedAt DateTime?
+  /// Failed verification attempts (code is invalidated after too many)
+  attempts   Int       @default(0)
+  createdAt  DateTime  @default(now())
+
+  @@index([userId, type])
+  @@map("otp_codes")
+}
+
+/// Rotating refresh tokens. Only the SHA-256 hash is stored.
+model RefreshToken {
+  id        String    @id @default(uuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  userAgent String?
+  ip        String?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}

@@ -1,98 +1,95 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# SmartCare AI — Backend API
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+Backend for the **SmartCare AI Intelligent Patient Journey Management Platform** (graduation project).
+Built with **NestJS 11 · Prisma 6 · PostgreSQL · JWT · Firebase (Google/Apple) · Swagger**.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+- **Production API:** `https://artsoraback.tech/api/v1`
+- **Interactive docs (Swagger):** `https://artsoraback.tech/docs`
+- **Health check:** `GET /api/v1/health`
 
-## Description
-
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
-
-## Project setup
+## Quick start (local)
 
 ```bash
-$ npm install
+npm install
+cp .env.example .env      # then fill in DATABASE_URL + JWT secrets (others optional)
+npm run prisma:generate
+npm run prisma:migrate    # creates the tables (needs PostgreSQL running)
+npm run start:dev         # http://localhost:3050 — docs at /docs
 ```
 
-## Compile and run the project
+Runs fine with **only** `DATABASE_URL` and the JWT secrets set:
+no SMTP password → verification codes are printed to the console;
+no Redis → in-memory rate limiting; no Firebase → social login returns 503 with a clear message.
 
-```bash
-# development
-$ npm run start
+## Scripts
 
-# watch mode
-$ npm run start:dev
+| Command | What it does |
+|---|---|
+| `npm run start:dev` | Dev server with hot reload |
+| `npm run build` / `start:prod` | Compile / run compiled build |
+| `npm run prisma:generate` | Generate the Prisma client |
+| `npm run prisma:migrate` | Create & apply a migration (dev) |
+| `npm run prisma:studio` | Visual DB browser |
+| `npm run deploy` | **Server:** install → generate → migrate → build → PM2 start |
+| `npm run redeploy` | **Server:** git pull → install → generate → migrate → build → PM2 restart |
+| `npm run lint` / `test` / `test:e2e` | Lint / unit tests / e2e tests |
 
-# production mode
-$ npm run start:prod
+Deployment details (nginx, HTTPS, PM2, DNS): see [DEPLOYMENT.md](DEPLOYMENT.md).
+
+## Project structure
+
+```
+src/
+├── auth/          # register, email verification, login, refresh rotation,
+│   │              # forgot/reset password, Google & Apple via Firebase
+│   ├── dto/  strategies/  entities/
+├── users/         # profile, edit profile, change password, avatar upload
+├── uploads/       # central file service — files get an id, stored via a
+│   └── storage/   # pluggable StorageProvider (local disk | Cloudflare R2)
+├── mail/          # Nodemailer (Gmail SMTP) — verification & reset codes
+├── firebase/      # Firebase Admin — verifies social sign-in ID tokens
+├── prisma/        # PrismaService (global)
+├── common/        # @Public(), @CurrentUser(), global JwtAuthGuard, shared DTOs
+├── config/        # environment validation (fails fast on bad config)
+└── main.ts        # helmet, CORS, validation pipe, Swagger, static /files
 ```
 
-## Run tests
+## Authentication flow
 
-```bash
-# unit tests
-$ npm run test
+1. `POST /api/v1/auth/register` → account created, **6-digit code emailed** (10 min expiry)
+2. `POST /api/v1/auth/verify-email` → email confirmed, returns `accessToken` + `refreshToken`
+3. Protected routes: `Authorization: Bearer <accessToken>` (15 min lifetime)
+4. `POST /api/v1/auth/refresh` → new token pair (refresh tokens are **single-use / rotated**, 7 days)
+5. Google/Apple: client signs in with Firebase → send the Firebase ID token to `POST /api/v1/auth/social/firebase`
 
-# e2e tests
-$ npm run test:e2e
+Full request/response examples for every endpoint are in **Swagger** (`/docs`) — click **Authorize** and paste an access token to try protected routes.
 
-# test coverage
-$ npm run test:cov
-```
+## Security decisions
 
-## Deployment
+- Passwords hashed with **bcrypt (12 rounds)**; OTP codes & refresh tokens stored **only as SHA-256 hashes**
+- Refresh token **rotation** — a stolen refresh token dies on first reuse; password reset/change revokes all sessions
+- **Rate limiting**: 100 req/min global per IP, 3–5 req/min on auth/email endpoints (Redis-backed when `REDIS_URL` is set)
+- **Secure by default**: every route requires JWT unless explicitly `@Public()`
+- Identical responses for existing/unknown emails on forgot-password & resend-verification (no account enumeration)
+- `helmet`, strict `ValidationPipe` (whitelist + forbid unknown fields), OTP attempt limits (5 tries)
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+## Environment variables
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+Every variable is documented inline in [.env.example](.env.example). Summary:
 
-```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
-```
+| Group | Variables | Required |
+|---|---|---|
+| Core | `PORT` (3050), `DATABASE_URL`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET` | ✅ |
+| Tokens | `JWT_ACCESS_TTL` (15m), `JWT_REFRESH_TTL_DAYS` (7) | optional |
+| Email | `MAIL_USER`, `MAIL_PASSWORD` (Google **App Password**), `MAIL_FROM` | for real emails |
+| Social | `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY` (service account) | for Google/Apple |
+| Rate limit | `REDIS_URL` | production |
+| Storage | `STORAGE_DRIVER` (local), `UPLOADS_DIR`, `APP_URL` | defaults work |
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+> **Firebase note:** the backend needs the **Admin SDK service account** key
+> (Firebase Console → Project settings → Service accounts → *Generate new private key*),
+> **not** the client `firebaseConfig` — that one belongs in the mobile/web app.
 
-## Resources
+## Roadmap (per the architecture document)
 
-Check out a few resources that may come in handy when working with NestJS:
-
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
-
-## Support
-
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
-
-## License
-
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+Auth & profiles (this module) → medical records (PHR) → doctor dashboard → telemedicine → AI modules (risk prediction, summaries, adherence) → hospital dashboard & family portal.
