@@ -1,5 +1,18 @@
+// =============================================================================
 // SmartCare AI - Database Schema
 // PostgreSQL + Prisma ORM
+//
+// Layout follows the patient journey:
+//   1. Identity & access   (User, profiles, caregivers, consent)
+//   2. Organization        (Hospital, Department)
+//   3. Care flow           (Appointment -> Visit -> Assessment/Diagnosis/
+//                           Tests/Images -> TreatmentPlan -> Prescription
+//                           -> MedicineTracking)
+//   4. Monitoring          (VitalSign, Device, DeviceReading, Alert)
+//   5. Emergency Hub       (EmergencyEvent, EmergencyContact, FirstAidGuide)
+//   6. Communication       (Chat, Message, Notification, DeviceToken)
+//   7. Files & compliance  (FileObject, MedicalDocument, AuditLog, OTP, tokens)
+// =============================================================================
 
 generator client {
   provider = "prisma-client-js"
@@ -17,6 +30,7 @@ datasource db {
 enum Role {
   PATIENT
   DOCTOR
+  CAREGIVER
   HOSPITAL_ADMIN
   ADMIN
 }
@@ -42,11 +56,166 @@ enum FilePurpose {
   MEDICAL_REPORT
   LAB_RESULT
   RADIOLOGY
+  FIRST_AID_MEDIA
   OTHER
 }
 
+enum BloodType {
+  A_POS
+  A_NEG
+  B_POS
+  B_NEG
+  AB_POS
+  AB_NEG
+  O_POS
+  O_NEG
+}
+
+enum AppointmentType {
+  IN_PERSON
+  VIDEO
+  CHAT
+}
+
+enum AppointmentStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+  NO_SHOW
+}
+
+enum VisitStatus {
+  OPEN
+  CLOSED
+  FOLLOW_UP_REQUIRED
+}
+
+enum AssessmentType {
+  AI_INITIAL
+  DOCTOR
+  FOLLOW_UP
+}
+
+enum RiskLevel {
+  LOW
+  MODERATE
+  HIGH
+  CRITICAL
+}
+
+enum Severity {
+  MILD
+  MODERATE
+  SEVERE
+  CRITICAL
+}
+
+enum TestStatus {
+  REQUESTED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum TreatmentPlanStatus {
+  ACTIVE
+  COMPLETED
+  PAUSED
+  CANCELLED
+}
+
+enum PrescriptionStatus {
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum MedicationDoseStatus {
+  SCHEDULED
+  TAKEN
+  MISSED
+  SKIPPED
+}
+
+enum VitalType {
+  HEART_RATE
+  BLOOD_PRESSURE_SYSTOLIC
+  BLOOD_PRESSURE_DIASTOLIC
+  BLOOD_SUGAR
+  TEMPERATURE
+  OXYGEN_SATURATION
+  RESPIRATORY_RATE
+  WEIGHT
+  SLEEP_HOURS
+  PAIN_LEVEL
+  STEPS
+  OTHER
+}
+
+enum VitalSource {
+  MANUAL
+  DEVICE
+}
+
+enum AlertStatus {
+  ACTIVE
+  ACKNOWLEDGED
+  RESOLVED
+  DISMISSED
+}
+
+enum EmergencyType {
+  SOS_BUTTON
+  VITAL_ANOMALY
+  MEDICATION_CRITICAL
+  FALL_DETECTED
+  OTHER
+}
+
+enum EmergencyStatus {
+  ACTIVE
+  ACKNOWLEDGED
+  RESOLVED
+  FALSE_ALARM
+}
+
+enum ChatType {
+  DIRECT
+  VISIT
+  SUPPORT
+}
+
+enum NotificationType {
+  APPOINTMENT
+  MEDICATION_REMINDER
+  ALERT
+  EMERGENCY
+  CHAT
+  SYSTEM
+}
+
+enum ConsentType {
+  VIEW_RECORDS
+  MANAGE_APPOINTMENTS
+  RECEIVE_ALERTS
+  FULL_ACCESS
+}
+
+enum ConsentStatus {
+  ACTIVE
+  EXPIRED
+  REVOKED
+}
+
+enum DevicePlatform {
+  IOS
+  ANDROID
+  WEB
+}
+
 // ---------------------------------------------------------------------------
-// Models
+// 1. Identity & access
 // ---------------------------------------------------------------------------
 
 model User {
@@ -66,23 +235,646 @@ model User {
   firebaseUid     String?      @unique
   isEmailVerified Boolean      @default(false)
   isActive        Boolean      @default(true)
+  lastLoginAt     DateTime?
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
 
-  otpCodes      OtpCode[]
-  refreshTokens RefreshToken[]
-  files         FileObject[]
+  // Role-specific profiles (exactly one is populated, matching `role`)
+  patientProfile   PatientProfile?
+  doctorProfile    DoctorProfile?
+  caregiverProfile CaregiverProfile?
+
+  otpCodes          OtpCode[]
+  refreshTokens     RefreshToken[]
+  files             FileObject[]
+  deviceTokens      DeviceToken[]
+  notifications     Notification[]
+  sentMessages      Message[]         @relation("SentMessages")
+  chatParticipants  ChatParticipant[]
+  consentsReceived  Consent[]         @relation("ConsentGrantedTo")
+  auditLogs         AuditLog[]
+  uploadedDocuments MedicalDocument[] @relation("DocumentUploader")
 
   @@map("users")
 }
 
-/// Files uploaded to object storage (Cloudflare R2).
-/// The DB row is the source of truth; `key` locates the object in the bucket.
+/// Patient-specific data. User rows with role=PATIENT get exactly one.
+model PatientProfile {
+  id               Int        @id @default(autoincrement())
+  userId           Int        @unique
+  user             User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Human-readable medical record number, e.g. "SC-2026-000042"
+  medicalRecordNo  String     @unique
+  bloodType        BloodType?
+  address          String?
+  /// Free-text medical background (chronic diseases, allergies, surgeries)
+  chronicDiseases  String?
+  allergies        String?
+  insuranceProvider String?
+  insuranceNumber  String?
+  registeredAt     DateTime   @default(now())
+
+  caregivers        PatientCaregiver[]
+  appointments      Appointment[]
+  visits            Visit[]
+  assessments       Assessment[]
+  treatmentPlans    TreatmentPlan[]
+  prescriptions     Prescription[]
+  medicationDoses   MedicationDose[]
+  vitalSigns        VitalSign[]
+  devices           Device[]
+  alerts            Alert[]
+  emergencyEvents   EmergencyEvent[]
+  emergencyContacts EmergencyContact[]
+  documents         MedicalDocument[]
+  consents          Consent[]
+
+  @@map("patient_profiles")
+}
+
+/// Doctor-specific data. User rows with role=DOCTOR get exactly one.
+model DoctorProfile {
+  id                Int         @id @default(autoincrement())
+  userId            Int         @unique
+  user              User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  licenseNumber     String      @unique
+  specialization    String
+  yearsOfExperience Int?
+  bio               String?
+  hospitalId        Int?
+  hospital          Hospital?   @relation(fields: [hospitalId], references: [id])
+  departmentId      Int?
+  department        Department? @relation(fields: [departmentId], references: [id])
+  isVerified        Boolean     @default(false)
+
+  appointments   Appointment[]
+  visits         Visit[]
+  medicalTests   MedicalTest[]
+  medicalImages  MedicalImage[]
+  treatmentPlans TreatmentPlan[]
+  prescriptions  Prescription[]
+
+  @@map("doctor_profiles")
+}
+
+/// Caregiver/family-member data. User rows with role=CAREGIVER get exactly one.
+model CaregiverProfile {
+  id           Int    @id @default(autoincrement())
+  userId       Int    @unique
+  user         User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// e.g. "spouse", "son", "professional nurse"
+  relationship String?
+  address      String?
+
+  patients PatientCaregiver[]
+
+  @@map("caregiver_profiles")
+}
+
+/// Links a patient to up to N caregivers with an explicit permission level.
+/// The Family Portal requirement: max 2 active links enforced in service code.
+model PatientCaregiver {
+  id          Int              @id @default(autoincrement())
+  patientId   Int
+  patient     PatientProfile   @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  caregiverId Int
+  caregiver   CaregiverProfile @relation(fields: [caregiverId], references: [id], onDelete: Cascade)
+  /// What the caregiver may do — mirrors ConsentType granularity
+  permission  ConsentType      @default(RECEIVE_ALERTS)
+  startDate   DateTime         @default(now())
+  endDate     DateTime?
+  isActive    Boolean          @default(true)
+
+  @@unique([patientId, caregiverId])
+  @@map("patient_caregivers")
+}
+
+/// Explicit, auditable data-sharing consent (compliance requirement).
+model Consent {
+  id              Int            @id @default(autoincrement())
+  patientId       Int
+  patient         PatientProfile @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  grantedToUserId Int
+  grantedTo       User           @relation("ConsentGrantedTo", fields: [grantedToUserId], references: [id], onDelete: Cascade)
+  type            ConsentType
+  status          ConsentStatus  @default(ACTIVE)
+  grantedAt       DateTime       @default(now())
+  expiresAt       DateTime?
+  revokedAt       DateTime?
+
+  @@index([patientId, status])
+  @@map("consents")
+}
+
+// ---------------------------------------------------------------------------
+// 2. Organization
+// ---------------------------------------------------------------------------
+
+model Hospital {
+  id       Int     @id @default(autoincrement())
+  name     String
+  type     String? // e.g. "general", "specialized", "clinic"
+  address  String?
+  phone    String?
+  email    String?
+  isActive Boolean @default(true)
+
+  departments Department[]
+  doctors     DoctorProfile[]
+
+  @@map("hospitals")
+}
+
+model Department {
+  id          Int      @id @default(autoincrement())
+  hospitalId  Int
+  hospital    Hospital @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  isActive    Boolean  @default(true)
+
+  doctors DoctorProfile[]
+
+  @@unique([hospitalId, name])
+  @@map("departments")
+}
+
+// ---------------------------------------------------------------------------
+// 3. Care flow
+// ---------------------------------------------------------------------------
+
+model Appointment {
+  id          Int               @id @default(autoincrement())
+  patientId   Int
+  patient     PatientProfile    @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  doctorId    Int
+  doctor      DoctorProfile     @relation(fields: [doctorId], references: [id])
+  /// User who created the booking (patient themself or an authorized caregiver)
+  bookedById  Int?
+  scheduledAt DateTime
+  endsAt      DateTime?
+  type        AppointmentType   @default(IN_PERSON)
+  status      AppointmentStatus @default(PENDING)
+  reason      String?
+  notes       String?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  visit Visit?
+
+  @@index([patientId, scheduledAt])
+  @@index([doctorId, scheduledAt])
+  @@map("appointments")
+}
+
+/// The actual encounter. Usually created from an appointment, but walk-in /
+/// emergency visits can exist without one (appointmentId nullable).
+model Visit {
+  id            Int            @id @default(autoincrement())
+  appointmentId Int?           @unique
+  appointment   Appointment?   @relation(fields: [appointmentId], references: [id])
+  patientId     Int
+  patient       PatientProfile @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  doctorId      Int
+  doctor        DoctorProfile  @relation(fields: [doctorId], references: [id])
+  date          DateTime       @default(now())
+  type          AppointmentType @default(IN_PERSON)
+  mainComplaint String?
+  notes         String?
+  status        VisitStatus    @default(OPEN)
+
+  assessments    Assessment[]
+  diagnoses      Diagnosis[]
+  medicalTests   MedicalTest[]
+  medicalImages  MedicalImage[]
+  treatmentPlans TreatmentPlan[]
+
+  @@index([patientId, date])
+  @@map("visits")
+}
+
+/// Structured evaluation. AI_INITIAL rows are produced by the AI Health
+/// Assistant before any visit exists (visitId nullable by design).
+model Assessment {
+  id           Int            @id @default(autoincrement())
+  visitId      Int?
+  visit        Visit?         @relation(fields: [visitId], references: [id], onDelete: Cascade)
+  patientId    Int
+  patient      PatientProfile @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  type         AssessmentType
+  /// Symptoms as reported (JSON string: [{name, duration, severity}, ...])
+  symptoms     String?
+  observations String?
+  riskLevel    RiskLevel?
+  /// AI output: suggested specialty referral, e.g. "cardiology"
+  suggestedSpecialty String?
+  notes        String?
+  createdAt    DateTime       @default(now())
+
+  @@index([patientId, createdAt])
+  @@map("assessments")
+}
+
+model Diagnosis {
+  id          Int       @id @default(autoincrement())
+  visitId     Int
+  visit       Visit     @relation(fields: [visitId], references: [id], onDelete: Cascade)
+  name        String
+  /// ICD-10 code, e.g. "E11.9"
+  code        String?
+  description String?
+  severity    Severity?
+  isActive    Boolean   @default(true)
+  diagnosedAt DateTime  @default(now())
+
+  treatmentPlans TreatmentPlan[]
+
+  @@map("diagnoses")
+}
+
+model MedicalTest {
+  id            Int           @id @default(autoincrement())
+  visitId       Int
+  visit         Visit         @relation(fields: [visitId], references: [id], onDelete: Cascade)
+  requestedById Int?
+  requestedBy   DoctorProfile? @relation(fields: [requestedById], references: [id])
+  name          String
+  /// e.g. "blood", "urine", "biopsy"
+  type          String?
+  status        TestStatus    @default(REQUESTED)
+  requestedAt   DateTime      @default(now())
+  notes         String?
+
+  result TestResult?
+
+  @@map("medical_tests")
+}
+
+model TestResult {
+  id             Int         @id @default(autoincrement())
+  testId         Int         @unique
+  test           MedicalTest @relation(fields: [testId], references: [id], onDelete: Cascade)
+  value          String
+  unit           String?
+  normalRange    String?
+  interpretation String?
+  notes          String?
+  /// Uploaded lab report file, if any
+  fileId         Int?
+  file           FileObject? @relation(fields: [fileId], references: [id])
+  resultedAt     DateTime    @default(now())
+
+  @@map("test_results")
+}
+
+/// X-ray / CT / MRI / Ultrasound. The binary lives in FileObject (uploads
+/// module); this row is the medical context around it.
+model MedicalImage {
+  id           Int            @id @default(autoincrement())
+  visitId      Int
+  visit        Visit          @relation(fields: [visitId], references: [id], onDelete: Cascade)
+  orderedById  Int?
+  orderedBy    DoctorProfile? @relation(fields: [orderedById], references: [id])
+  /// e.g. "XRAY", "CT", "MRI", "ULTRASOUND"
+  type         String
+  bodyPart     String?
+  fileId       Int
+  file         FileObject     @relation(fields: [fileId], references: [id])
+  /// Radiologist / doctor written report
+  report       String?
+  takenAt      DateTime       @default(now())
+
+  @@map("medical_images")
+}
+
+model TreatmentPlan {
+  id          Int                 @id @default(autoincrement())
+  patientId   Int
+  patient     PatientProfile      @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  doctorId    Int
+  doctor      DoctorProfile       @relation(fields: [doctorId], references: [id])
+  visitId     Int?
+  visit       Visit?              @relation(fields: [visitId], references: [id])
+  diagnosisId Int?
+  diagnosis   Diagnosis?          @relation(fields: [diagnosisId], references: [id])
+  title       String
+  description String?
+  goals       String?
+  status      TreatmentPlanStatus @default(ACTIVE)
+  startDate   DateTime            @default(now())
+  endDate     DateTime?
+  notes       String?
+
+  prescriptions Prescription[]
+
+  @@index([patientId, status])
+  @@map("treatment_plans")
+}
+
+model Prescription {
+  id              Int                @id @default(autoincrement())
+  patientId       Int
+  patient         PatientProfile     @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  doctorId        Int
+  doctor          DoctorProfile      @relation(fields: [doctorId], references: [id])
+  treatmentPlanId Int?
+  treatmentPlan   TreatmentPlan?     @relation(fields: [treatmentPlanId], references: [id])
+  status          PrescriptionStatus @default(ACTIVE)
+  instructions    String?
+  notes           String?
+  issuedAt        DateTime           @default(now())
+
+  items PrescriptionItem[]
+
+  @@index([patientId, status])
+  @@map("prescriptions")
+}
+
+/// Medicine catalog — one row per drug so adherence analytics can aggregate
+/// across patients. Kept minimal for MVP (name + form + strength).
+model Medicine {
+  id       Int     @id @default(autoincrement())
+  name     String
+  /// e.g. "tablet", "capsule", "syrup", "injection"
+  form     String?
+  /// e.g. "500mg"
+  strength String?
+
+  prescriptionItems PrescriptionItem[]
+
+  @@unique([name, form, strength])
+  @@map("medicines")
+}
+
+model PrescriptionItem {
+  id             Int          @id @default(autoincrement())
+  prescriptionId Int
+  prescription   Prescription @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
+  medicineId     Int
+  medicine       Medicine     @relation(fields: [medicineId], references: [id])
+  /// e.g. "1 tablet"
+  dose           String
+  /// e.g. "every 8 hours", "twice daily"
+  frequency      String
+  /// e.g. "oral", "IV", "topical"
+  route          String?
+  /// e.g. "7 days"
+  duration       String?
+  instructions   String?
+
+  doses MedicationDose[]
+
+  @@map("prescription_items")
+}
+
+/// One row per scheduled intake — the raw data behind medication-adherence
+/// analytics and reminder notifications. (ERD: MedicineTracking)
+model MedicationDose {
+  id                 Int                  @id @default(autoincrement())
+  prescriptionItemId Int
+  prescriptionItem   PrescriptionItem     @relation(fields: [prescriptionItemId], references: [id], onDelete: Cascade)
+  patientId          Int
+  patient            PatientProfile       @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  scheduledAt        DateTime
+  takenAt            DateTime?
+  status             MedicationDoseStatus @default(SCHEDULED)
+  notes              String?
+
+  @@index([patientId, scheduledAt])
+  @@index([status, scheduledAt])
+  @@map("medication_doses")
+}
+
+// ---------------------------------------------------------------------------
+// 4. Monitoring
+// ---------------------------------------------------------------------------
+
+/// Single time-series table for all vitals — manual entries and device
+/// readings share it so charts/AI read one stream. (ERD: VitalSign +
+/// DeviceReading merged; `source`/`deviceId` distinguish origin.)
+model VitalSign {
+  id         Int            @id @default(autoincrement())
+  patientId  Int
+  patient    PatientProfile @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  type       VitalType
+  value      Float
+  unit       String
+  source     VitalSource    @default(MANUAL)
+  deviceId   Int?
+  device     Device?        @relation(fields: [deviceId], references: [id])
+  measuredAt DateTime       @default(now())
+
+  @@index([patientId, type, measuredAt])
+  @@map("vital_signs")
+}
+
+/// Wearables / IoT health devices paired to a patient.
+model Device {
+  id           Int            @id @default(autoincrement())
+  patientId    Int
+  patient      PatientProfile @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  /// e.g. "smartwatch", "glucometer", "bp_monitor"
+  type         String
+  name         String
+  manufacturer String?
+  serialNumber String?        @unique
+  connectedAt  DateTime       @default(now())
+  lastSyncAt   DateTime?
+  isActive     Boolean        @default(true)
+
+  readings VitalSign[]
+
+  @@map("devices")
+}
+
+/// System-detected abnormality (threshold breach, missed medication streak,
+/// AI anomaly). Feeds the doctor's Smart Alert Center and can escalate to an
+/// EmergencyEvent.
+model Alert {
+  id          Int            @id @default(autoincrement())
+  patientId   Int
+  patient     PatientProfile @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  title       String
+  description String?
+  severity    RiskLevel
+  status      AlertStatus    @default(ACTIVE)
+  /// What produced it: "vital_threshold", "adherence", "ai_anomaly"
+  source      String?
+  /// Optional pointer to the triggering vital sign
+  vitalSignId Int?
+  createdAt   DateTime       @default(now())
+  resolvedAt  DateTime?
+
+  notifications   Notification[]
+  emergencyEvents EmergencyEvent[]
+
+  @@index([patientId, status])
+  @@map("alerts")
+}
+
+// ---------------------------------------------------------------------------
+// 5. Emergency Hub
+// ---------------------------------------------------------------------------
+
+/// A critical situation: patient pressed SOS, or the system escalated a
+/// CRITICAL alert. Drives the emergency notification fan-out (push + SMS)
+/// to caregivers and emergency contacts.
+model EmergencyEvent {
+  id             Int             @id @default(autoincrement())
+  patientId      Int
+  patient        PatientProfile  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  type           EmergencyType
+  status         EmergencyStatus @default(ACTIVE)
+  /// GPS position captured when the event fired (mobile SOS)
+  latitude       Float?
+  longitude      Float?
+  description    String?
+  /// Escalated from this alert, if system-generated
+  alertId        Int?
+  alert          Alert?          @relation(fields: [alertId], references: [id])
+  /// User (caregiver/doctor) who acknowledged the emergency
+  acknowledgedById Int?
+  acknowledgedAt DateTime?
+  resolvedAt     DateTime?
+  createdAt      DateTime        @default(now())
+
+  @@index([patientId, status])
+  @@map("emergency_events")
+}
+
+/// People to notify in an emergency who are NOT platform users (plain
+/// phone contacts). Platform caregivers are reached via PatientCaregiver.
+model EmergencyContact {
+  id        Int            @id @default(autoincrement())
+  patientId Int
+  patient   PatientProfile @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  name      String
+  phone     String
+  /// e.g. "father", "neighbor"
+  relationship String?
+  priority  Int            @default(1)
+
+  @@map("emergency_contacts")
+}
+
+/// First-aid knowledge base (Emergency Hub content). Mobile app caches all
+/// published guides locally so they work with zero connectivity.
+model FirstAidGuide {
+  id          Int         @id @default(autoincrement())
+  slug        String      @unique
+  title       String
+  /// e.g. "bleeding", "burns", "choking", "cpr", "fractures"
+  category    String
+  /// Markdown body with step-by-step instructions
+  content     String
+  /// Illustration / video stored via the uploads module
+  mediaFileId Int?
+  mediaFile   FileObject? @relation(fields: [mediaFileId], references: [id])
+  isPublished Boolean     @default(false)
+  updatedAt   DateTime    @updatedAt
+  createdAt   DateTime    @default(now())
+
+  @@index([category, isPublished])
+  @@map("first_aid_guides")
+}
+
+// ---------------------------------------------------------------------------
+// 6. Communication
+// ---------------------------------------------------------------------------
+
+model Chat {
+  id        Int      @id @default(autoincrement())
+  type      ChatType @default(DIRECT)
+  /// Optional link to the visit this consultation belongs to
+  visitId   Int?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  participants ChatParticipant[]
+  messages     Message[]
+
+  @@map("chats")
+}
+
+model ChatParticipant {
+  id       Int      @id @default(autoincrement())
+  chatId   Int
+  chat     Chat     @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  userId   Int
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  joinedAt DateTime @default(now())
+  /// Last time this participant opened the chat (unread counters)
+  lastReadAt DateTime?
+
+  @@unique([chatId, userId])
+  @@map("chat_participants")
+}
+
+model Message {
+  id       Int      @id @default(autoincrement())
+  chatId   Int
+  chat     Chat     @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  senderId Int
+  sender   User     @relation("SentMessages", fields: [senderId], references: [id])
+  text     String
+  /// Attachment via uploads module
+  fileId   Int?
+  file     FileObject? @relation(fields: [fileId], references: [id])
+  sentAt   DateTime @default(now())
+  editedAt DateTime?
+  deletedAt DateTime?
+
+  @@index([chatId, sentAt])
+  @@map("messages")
+}
+
+/// In-app notification feed (bell icon). Push delivery happens via
+/// DeviceToken + FCM; this row is the persistent record.
+model Notification {
+  id        Int              @id @default(autoincrement())
+  userId    Int
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      NotificationType
+  title     String
+  body      String
+  /// Deep-link payload (JSON string): {"screen": "...", "id": 123}
+  data      String?
+  alertId   Int?
+  alert     Alert?           @relation(fields: [alertId], references: [id])
+  readAt    DateTime?
+  createdAt DateTime         @default(now())
+
+  @@index([userId, readAt])
+  @@map("notifications")
+}
+
+/// FCM registration tokens — one per installed app instance. Used to reach
+/// users who are offline/backgrounded (emergencies, reminders).
+model DeviceToken {
+  id         Int            @id @default(autoincrement())
+  userId     Int
+  user       User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token      String         @unique
+  platform   DevicePlatform
+  createdAt  DateTime       @default(now())
+  lastUsedAt DateTime       @default(now())
+  revokedAt  DateTime?
+
+  @@index([userId])
+  @@map("device_tokens")
+}
+
+// ---------------------------------------------------------------------------
+// 7. Files, documents & compliance
+// ---------------------------------------------------------------------------
+
+/// Files uploaded to storage (pluggable driver: local disk / R2).
+/// The DB row is the source of truth; `key` locates the physical object.
 model FileObject {
   id        Int         @id @default(autoincrement())
   ownerId   Int
   owner     User        @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  /// Object key inside the R2 bucket, e.g. "avatar/<userId>/<uuid>.png"
+  /// Object key in storage, e.g. "avatar/42/<uuid>.png"
   key       String      @unique
   url       String
   mimeType  String
@@ -90,8 +882,53 @@ model FileObject {
   purpose   FilePurpose @default(OTHER)
   createdAt DateTime    @default(now())
 
+  testResults    TestResult[]
+  medicalImages  MedicalImage[]
+  documents      MedicalDocument[]
+  messages       Message[]
+  firstAidGuides FirstAidGuide[]
+
   @@index([ownerId])
   @@map("file_objects")
+}
+
+/// Patient-visible document library (reports, discharge summaries, insurance
+/// papers). Wraps a FileObject with medical metadata.
+model MedicalDocument {
+  id           Int            @id @default(autoincrement())
+  patientId    Int
+  patient      PatientProfile @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  uploadedById Int
+  uploadedBy   User           @relation("DocumentUploader", fields: [uploadedById], references: [id])
+  fileId       Int
+  file         FileObject     @relation(fields: [fileId], references: [id])
+  /// e.g. "report", "discharge_summary", "insurance", "referral"
+  type         String
+  name         String
+  description  String?
+  uploadedAt   DateTime       @default(now())
+
+  @@index([patientId, type])
+  @@map("medical_documents")
+}
+
+/// Who did what, when, from where — required for medical-data compliance.
+/// Written by an interceptor on every mutating request.
+model AuditLog {
+  id          Int      @id @default(autoincrement())
+  userId      Int?
+  user        User?    @relation(fields: [userId], references: [id])
+  /// e.g. "CREATE", "UPDATE", "DELETE", "LOGIN", "VIEW_RECORD"
+  action      String
+  entityName  String
+  entityId    String?
+  ipAddress   String?
+  description String?
+  createdAt   DateTime @default(now())
+
+  @@index([entityName, entityId])
+  @@index([userId, createdAt])
+  @@map("audit_logs")
 }
 
 /// One-time codes for email verification and password reset.
