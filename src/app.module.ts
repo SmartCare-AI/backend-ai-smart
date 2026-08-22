@@ -1,16 +1,22 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { ThrottlerStorageRedisService } from '@nest-lab/throttler-storage-redis';
 import Redis from 'ioredis';
 import { AppController } from './app.controller';
+import { AuditInterceptor } from './audit/audit.interceptor';
+import { AuditModule } from './audit/audit.module';
 import { AuthModule } from './auth/auth.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
+import { RolesGuard } from './common/guards/roles.guard';
 import { validateEnv } from './config/env.validation';
+import { ConsentModule } from './consent/consent.module';
 import { FirebaseModule } from './firebase/firebase.module';
 import { MailModule } from './mail/mail.module';
+import { NotificationsModule } from './notifications/notifications.module';
 import { PrismaModule } from './prisma/prisma.module';
+import { QueueModule } from './queues/queue.module';
 import { UploadsModule } from './uploads/uploads.module';
 import { UsersModule } from './users/users.module';
 
@@ -40,6 +46,10 @@ import { UsersModule } from './users/users.module';
     PrismaModule,
     MailModule,
     FirebaseModule,
+    QueueModule,
+    AuditModule,
+    ConsentModule,
+    NotificationsModule,
     AuthModule,
     UsersModule,
     UploadsModule,
@@ -50,6 +60,10 @@ import { UsersModule } from './users/users.module';
     { provide: APP_GUARD, useClass: ThrottlerGuard },
     // Secure by default: every route requires a JWT unless marked @Public().
     { provide: APP_GUARD, useClass: JwtAuthGuard },
+    // Role check runs after authentication (needs request.user).
+    { provide: APP_GUARD, useClass: RolesGuard },
+    // Compliance trail for every successful mutating request.
+    { provide: APP_INTERCEPTOR, useClass: AuditInterceptor },
   ],
 })
 export class AppModule {}

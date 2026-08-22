@@ -1,5 +1,10 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { AuthProvider, Gender, Role, User } from '@prisma/client';
+import {
+  CaregiverProfileEntity,
+  DoctorProfileEntity,
+  PatientProfileEntity,
+} from './profile.entities';
 
 /**
  * Public representation of a user — never exposes the password hash.
@@ -53,6 +58,20 @@ export class UserEntity {
   @ApiProperty({ example: '2026-08-12T09:30:00.000Z' })
   updatedAt!: Date;
 
+  @ApiPropertyOptional({
+    type: PatientProfileEntity,
+    nullable: true,
+    description: 'Present when role=PATIENT and profile relations are loaded.',
+  })
+  patientProfile?: PatientProfileEntity | null;
+
+  @ApiPropertyOptional({ type: DoctorProfileEntity, nullable: true })
+  doctorProfile?: DoctorProfileEntity | null;
+
+  @ApiPropertyOptional({ type: CaregiverProfileEntity, nullable: true })
+  caregiverProfile?: CaregiverProfileEntity | null;
+
+  /** Accepts a plain User or one loaded with profile relations. */
   static fromUser(user: User): UserEntity {
     const { password: _password, firebaseUid: _uid, ...safe } = user;
     return Object.assign(new UserEntity(), safe);

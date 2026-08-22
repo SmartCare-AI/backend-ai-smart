@@ -48,6 +48,11 @@ export class FirebaseService implements OnModuleInit {
     return !!this.app;
   }
 
+  /** Admin app instance for other Firebase services (FCM push, etc.). */
+  get adminApp(): App | undefined {
+    return this.app;
+  }
+
   async verifyIdToken(idToken: string): Promise<DecodedIdToken> {
     if (!this.app) {
       throw new ServiceUnavailableException(

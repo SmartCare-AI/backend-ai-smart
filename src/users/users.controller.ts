@@ -4,11 +4,15 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  Param,
+  ParseIntPipe,
   Patch,
+  Post,
   Put,
   UploadedFile,
   UseInterceptors,
 } from '@nestjs/common';
+import { Role } from '@prisma/client';
 import { FileInterceptor } from '@nestjs/platform-express';
 import {
   ApiBearerAuth,
@@ -20,19 +24,43 @@ import {
 import { Throttle } from '@nestjs/throttler';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../common/decorators/current-user.decorator';
+import { Roles } from '../common/decorators/roles.decorator';
 import { MessageResponseDto } from '../common/dto/message-response.dto';
 import { MAX_AVATAR_SIZE } from '../uploads/uploads.service';
 import { ChangePasswordDto } from './dto/change-password.dto';
+import { CreateDoctorProfileDto } from './dto/create-doctor-profile.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { UploadAvatarDto } from './dto/upload-avatar.dto';
 import { UserEntity } from './entities/user.entity';
+import { ProfilesService } from './profiles.service';
 import { UsersService } from './users.service';
 
 @ApiTags('Users')
 @ApiBearerAuth('access-token')
 @Controller('users')
 export class UsersController {
-  constructor(private readonly usersService: UsersService) {}
+  constructor(
+    private readonly usersService: UsersService,
+    private readonly profilesService: ProfilesService,
+  ) {}
+
+  @Post(':id/doctor-profile')
+  @Roles(Role.ADMIN)
+  @ApiOperation({
+    summary: 'Promote a user to DOCTOR (admin only)',
+    description:
+      'Sets the role to DOCTOR and creates/updates the doctor profile with license details. Admin-created doctors are marked license-verified.',
+  })
+  @ApiResponse({ status: 201, type: UserEntity })
+  @ApiResponse({ status: 403, description: 'Requires ADMIN role.' })
+  @ApiResponse({ status: 404, description: 'User not found.' })
+  @ApiResponse({ status: 409, description: 'License number already in use.' })
+  promoteToDoctor(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: CreateDoctorProfileDto,
+  ) {
+    return this.profilesService.promoteToDoctor(id, dto);
+  }
 
   @Get('me')
   @ApiOperation({ summary: 'Get my profile' })

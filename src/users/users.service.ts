@@ -22,7 +22,14 @@ export class UsersService {
   ) {}
 
   async getProfile(userId: number): Promise<UserEntity> {
-    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: {
+        patientProfile: true,
+        doctorProfile: true,
+        caregiverProfile: true,
+      },
+    });
     if (!user) throw new NotFoundException('User not found.');
     return UserEntity.fromUser(user);
   }

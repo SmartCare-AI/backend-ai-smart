@@ -77,6 +77,7 @@ async function bootstrap() {
     .addTag('Health', 'Service liveness')
     .addTag('Auth', 'Registration, login, email verification, password reset, social sign-in')
     .addTag('Users', 'Profile management')
+    .addTag('Notifications', 'In-app feed + push device tokens (FCM)')
     .addTag('Uploads', 'File storage (pluggable: local disk by default)')
     .build();
 

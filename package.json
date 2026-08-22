@@ -23,6 +23,7 @@
     "prisma:deploy": "prisma migrate deploy",
     "prisma:studio": "prisma studio",
     "db:push": "prisma db push",
+    "db:seed": "prisma db seed",
     "deploy": "npm install && npm run prisma:generate && npm run prisma:deploy && npm run build && pm2 startOrRestart ecosystem.config.js --update-env && pm2 save",
     "redeploy": "git pull && npm install && npm run prisma:generate && npm run prisma:deploy && npm run build && pm2 startOrRestart ecosystem.config.js --update-env && pm2 save"
   },
@@ -39,6 +40,7 @@
     "@nestjs/throttler": "^6.5.0",
     "@prisma/client": "^6.19.3",
     "bcryptjs": "^3.0.3",
+    "bullmq": "^6.2.0",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.15.1",
     "firebase-admin": "^14.2.0",
@@ -78,6 +80,9 @@
     "tsconfig-paths": "^4.2.0",
     "typescript": "^5.7.3",
     "typescript-eslint": "^8.20.0"
+  },
+  "prisma": {
+    "seed": "ts-node prisma/seed.ts"
   },
   "jest": {
     "moduleFileExtensions": [

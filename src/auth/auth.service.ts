@@ -15,6 +15,7 @@ import { FirebaseService } from '../firebase/firebase.service';
 import { MailService } from '../mail/mail.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { UserEntity } from '../users/entities/user.entity';
+import { ProfilesService } from '../users/profiles.service';
 import { FirebaseLoginDto } from './dto/firebase-login.dto';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
@@ -46,6 +47,7 @@ export class AuthService {
     private readonly config: ConfigService,
     private readonly mail: MailService,
     private readonly firebase: FirebaseService,
+    private readonly profiles: ProfilesService,
   ) {}
 
   // -------------------------------------------------------------------------
@@ -83,6 +85,9 @@ export class AuthService {
             phone: dto.phone ?? null,
           },
         });
+
+    // New accounts are patients by default — give them their medical record.
+    await this.profiles.ensurePatientProfile(user.id);
 
     await this.issueOtp(user, OtpType.EMAIL_VERIFICATION);
     return {
@@ -147,6 +152,11 @@ export class AuthService {
         'Email not verified. Please verify your email or request a new code.',
       );
     }
+
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: { lastLoginAt: new Date() },
+    });
     return this.buildAuthResponse(user, meta);
   }
 
@@ -286,6 +296,15 @@ export class AuthService {
     if (!user.isActive) {
       throw new ForbiddenException('This account has been deactivated.');
     }
+
+    // Social accounts default to PATIENT — ensure the medical record exists.
+    if (user.role === 'PATIENT') {
+      await this.profiles.ensurePatientProfile(user.id);
+    }
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: { lastLoginAt: new Date() },
+    });
     return this.buildAuthResponse(user, meta);
   }
 
