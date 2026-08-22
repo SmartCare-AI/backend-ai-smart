@@ -1,9 +1,10 @@
 import {
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Role } from '@prisma/client';
+import { DoctorProfile, PatientProfile, Role } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateDoctorProfileDto } from './dto/create-doctor-profile.dto';
 import { UserEntity } from './entities/user.entity';
@@ -11,6 +12,28 @@ import { UserEntity } from './entities/user.entity';
 @Injectable()
 export class ProfilesService {
   constructor(private readonly prisma: PrismaService) {}
+
+  /** The requester's own patient profile — 403 if they aren't a patient. */
+  async getPatientByUserId(userId: number): Promise<PatientProfile> {
+    const profile = await this.prisma.patientProfile.findUnique({
+      where: { userId },
+    });
+    if (!profile) {
+      throw new ForbiddenException('This action requires a patient account.');
+    }
+    return profile;
+  }
+
+  /** The requester's own doctor profile — 403 if they aren't a doctor. */
+  async getDoctorByUserId(userId: number): Promise<DoctorProfile> {
+    const profile = await this.prisma.doctorProfile.findUnique({
+      where: { userId },
+    });
+    if (!profile) {
+      throw new ForbiddenException('This action requires a doctor account.');
+    }
+    return profile;
+  }
 
   /**
    * Called by AuthService whenever a PATIENT account is created (email

@@ -5,9 +5,13 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { ThrottlerStorageRedisService } from '@nest-lab/throttler-storage-redis';
 import Redis from 'ioredis';
 import { AppController } from './app.controller';
+import { AppointmentsModule } from './appointments/appointments.module';
 import { AuditInterceptor } from './audit/audit.interceptor';
 import { AuditModule } from './audit/audit.module';
 import { AuthModule } from './auth/auth.module';
+import { HospitalsModule } from './hospitals/hospitals.module';
+import { TreatmentModule } from './treatment/treatment.module';
+import { VisitsModule } from './visits/visits.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
 import { validateEnv } from './config/env.validation';
@@ -53,6 +57,10 @@ import { UsersModule } from './users/users.module';
     AuthModule,
     UsersModule,
     UploadsModule,
+    HospitalsModule,
+    AppointmentsModule,
+    VisitsModule,
+    TreatmentModule,
   ],
   controllers: [AppController],
   providers: [
