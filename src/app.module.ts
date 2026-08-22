@@ -1,9 +1,11 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
+import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { ThrottlerStorageRedisService } from '@nest-lab/throttler-storage-redis';
 import Redis from 'ioredis';
+import { AlertsModule } from './alerts/alerts.module';
 import { AppController } from './app.controller';
 import { AppointmentsModule } from './appointments/appointments.module';
 import { AuditInterceptor } from './audit/audit.interceptor';
@@ -23,10 +25,12 @@ import { PrismaModule } from './prisma/prisma.module';
 import { QueueModule } from './queues/queue.module';
 import { UploadsModule } from './uploads/uploads.module';
 import { UsersModule } from './users/users.module';
+import { VitalsModule } from './vitals/vitals.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, validate: validateEnv }),
+    ScheduleModule.forRoot(),
 
     // Rate limiting — global safety net of 100 req/min per IP.
     // Sensitive endpoints override this with stricter @Throttle() limits.
@@ -61,6 +65,8 @@ import { UsersModule } from './users/users.module';
     AppointmentsModule,
     VisitsModule,
     TreatmentModule,
+    AlertsModule,
+    VitalsModule,
   ],
   controllers: [AppController],
   providers: [

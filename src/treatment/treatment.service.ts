@@ -272,6 +272,45 @@ export class TreatmentService {
     });
   }
 
+  /**
+   * Adherence score over a window: TAKEN / (TAKEN + MISSED).
+   * The doctor-dashboard number that shows whether treatment is followed.
+   */
+  async adherence(
+    requester: AuthenticatedUser,
+    patientId: number,
+    days: number,
+  ) {
+    await this.consent.assertCanAccessPatient(
+      requester,
+      patientId,
+      ConsentType.VIEW_RECORDS,
+    );
+    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+    const grouped = await this.prisma.medicationDose.groupBy({
+      by: ['status'],
+      where: { patientId, scheduledAt: { gte: since, lte: new Date() } },
+      _count: { _all: true },
+    });
+    const counts = Object.fromEntries(
+      grouped.map((g) => [g.status, g._count._all]),
+    ) as Partial<Record<MedicationDoseStatus, number>>;
+
+    const taken = counts.TAKEN ?? 0;
+    const missed = counts.MISSED ?? 0;
+    const settled = taken + missed;
+    return {
+      patientId,
+      windowDays: days,
+      taken,
+      missed,
+      skipped: counts.SKIPPED ?? 0,
+      upcoming: counts.SCHEDULED ?? 0,
+      /** 0..1, null when no settled doses in the window */
+      score: settled > 0 ? Math.round((taken / settled) * 100) / 100 : null,
+    };
+  }
+
   // -------------------------------------------------------------------------
 
   private generateSchedule(item: PrescriptionItemDto): Date[] {

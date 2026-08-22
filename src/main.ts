@@ -94,7 +94,9 @@ async function bootstrap() {
     .addTag('Appointments', 'Booking, confirmation, doctor schedules')
     .addTag('Visits', 'Encounters: diagnoses, tests, results, radiology')
     .addTag('Assessments', 'Symptom self-reports & doctor evaluations')
-    .addTag('Treatment', 'Plans, prescriptions, medication doses')
+    .addTag('Treatment', 'Plans, prescriptions, medication doses, adherence')
+    .addTag('Vitals', 'Vital-sign time-series with clinical threshold alerts')
+    .addTag('Alerts', 'Smart Alert Center — abnormal patterns & adherence')
     .addTag('Notifications', 'In-app feed + push device tokens (FCM)')
     .addTag('Uploads', 'File storage (pluggable: local disk by default)')
     .build();

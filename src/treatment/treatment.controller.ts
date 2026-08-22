@@ -157,4 +157,34 @@ export class MedicationsController {
   ) {
     return this.treatmentService.takeDose(user, id);
   }
+
+  @Get('adherence/patients/:patientId')
+  @ApiOperation({
+    summary: 'Medication adherence score',
+    description:
+      'TAKEN / (TAKEN + MISSED) over the window (default 30 days). Access: the patient, treating doctor, or caregiver with VIEW_RECORDS.',
+  })
+  @ApiQuery({ name: 'days', required: false, example: 30 })
+  @ApiResponse({
+    status: 200,
+    schema: {
+      example: {
+        patientId: 1,
+        windowDays: 30,
+        taken: 52,
+        missed: 4,
+        skipped: 1,
+        upcoming: 12,
+        score: 0.93,
+      },
+    },
+  })
+  adherence(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('patientId', ParseIntPipe) patientId: number,
+    @Query('days') days?: string,
+  ) {
+    const window = Math.min(Math.max(parseInt(days ?? '30', 10) || 30, 1), 365);
+    return this.treatmentService.adherence(user, patientId, window);
+  }
 }

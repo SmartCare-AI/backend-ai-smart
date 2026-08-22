@@ -638,6 +638,8 @@ model MedicationDose {
   scheduledAt        DateTime
   takenAt            DateTime?
   status             MedicationDoseStatus @default(SCHEDULED)
+  /// Set when the reminder push went out — prevents duplicate reminders.
+  reminderSentAt     DateTime?
   notes              String?
 
   @@index([patientId, scheduledAt])
