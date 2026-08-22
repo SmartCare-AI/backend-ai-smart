@@ -5,7 +5,9 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { ThrottlerStorageRedisService } from '@nest-lab/throttler-storage-redis';
 import Redis from 'ioredis';
+import { AiModule } from './ai/ai.module';
 import { AlertsModule } from './alerts/alerts.module';
+import { AnalyticsModule } from './analytics/analytics.module';
 import { AppController } from './app.controller';
 import { AppointmentsModule } from './appointments/appointments.module';
 import { AuditInterceptor } from './audit/audit.interceptor';
@@ -71,6 +73,8 @@ import { VitalsModule } from './vitals/vitals.module';
     AlertsModule,
     VitalsModule,
     ChatModule,
+    AiModule,
+    AnalyticsModule,
   ],
   controllers: [AppController],
   providers: [
