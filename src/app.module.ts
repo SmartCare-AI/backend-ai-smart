@@ -18,6 +18,7 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
 import { validateEnv } from './config/env.validation';
 import { ConsentModule } from './consent/consent.module';
+import { EmergencyModule } from './emergency/emergency.module';
 import { FirebaseModule } from './firebase/firebase.module';
 import { MailModule } from './mail/mail.module';
 import { NotificationsModule } from './notifications/notifications.module';
@@ -65,6 +66,7 @@ import { VitalsModule } from './vitals/vitals.module';
     AppointmentsModule,
     VisitsModule,
     TreatmentModule,
+    EmergencyModule,
     AlertsModule,
     VitalsModule,
   ],

@@ -14,6 +14,7 @@ import {
 } from '@prisma/client';
 import type { AuthenticatedUser } from '../common/decorators/current-user.decorator';
 import { ConsentService } from '../consent/consent.service';
+import { EmergencyService } from '../emergency/emergency.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProfilesService } from '../users/profiles.service';
@@ -51,6 +52,7 @@ export class AlertsService {
     private readonly consent: ConsentService,
     private readonly profiles: ProfilesService,
     private readonly notifications: NotificationsService,
+    private readonly emergency: EmergencyService,
   ) {}
 
   async raise(input: RaiseAlertInput): Promise<Alert | null> {
@@ -87,33 +89,23 @@ export class AlertsService {
 
     const isEmergency = input.emergency ?? input.severity === RiskLevel.CRITICAL;
     if (isEmergency) {
-      await this.prisma.emergencyEvent.create({
-        data: {
-          patientId: input.patientId,
-          type: input.emergencyType ?? EmergencyType.VITAL_ANOMALY,
-          alertId: alert.id,
-          description: input.title,
-        },
+      // Emergency engine owns the fan-out + SMS escalation timer.
+      await this.emergency.openEvent({
+        patientId: input.patientId,
+        type: input.emergencyType ?? EmergencyType.VITAL_ANOMALY,
+        alertId: alert.id,
+        description: input.title,
+      });
+    } else {
+      const circle = await this.consent.patientCircleUserIds(input.patientId);
+      await this.notifications.notifyMany(circle, {
+        type: NotificationType.ALERT,
+        title: `Alert — ${patientName}`,
+        body: input.description ?? input.title,
+        data: { screen: 'alerts', id: String(alert.id) },
+        alertId: alert.id,
       });
     }
-
-    const notificationType = isEmergency
-      ? NotificationType.EMERGENCY
-      : NotificationType.ALERT;
-    const title = isEmergency
-      ? `EMERGENCY — ${patientName}`
-      : `Alert — ${patientName}`;
-    const recipients = new Set<number>([
-      ...(await this.treatingDoctorUserIds(input.patientId)),
-      ...(await this.caregiverUserIds(input.patientId)),
-    ]);
-    await this.notifications.notifyMany([...recipients], {
-      type: notificationType,
-      title,
-      body: input.description ?? input.title,
-      data: { screen: 'alerts', id: String(alert.id) },
-      alertId: alert.id,
-    });
 
     this.logger.log(
       `Alert ${alert.id} (${input.severity}) raised for patient ${input.patientId}: ${input.title}`,
@@ -221,31 +213,4 @@ export class AlertsService {
     });
   }
 
-  // -------------------------------------------------------------------------
-
-  private async treatingDoctorUserIds(patientId: number): Promise<number[]> {
-    const doctors = await this.prisma.doctorProfile.findMany({
-      where: {
-        OR: [
-          { appointments: { some: { patientId } } },
-          { visits: { some: { patientId } } },
-        ],
-      },
-      select: { userId: true },
-    });
-    return doctors.map((d) => d.userId);
-  }
-
-  private async caregiverUserIds(patientId: number): Promise<number[]> {
-    const links = await this.prisma.patientCaregiver.findMany({
-      where: {
-        patientId,
-        isActive: true,
-        permission: { in: [ConsentType.RECEIVE_ALERTS, ConsentType.FULL_ACCESS] },
-        OR: [{ endDate: null }, { endDate: { gt: new Date() } }],
-      },
-      select: { caregiver: { select: { userId: true } } },
-    });
-    return links.map((l) => l.caregiver.userId);
-  }
 }

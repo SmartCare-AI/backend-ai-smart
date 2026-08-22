@@ -72,6 +72,42 @@ export class ConsentService {
     throw new ForbiddenException('You do not have access to this patient.');
   }
 
+  /**
+   * The patient's care circle: user ids of treating doctors (appointment or
+   * visit relationship) + caregivers allowed to receive alerts. This is the
+   * recipient list for alerts and emergencies.
+   */
+  async patientCircleUserIds(patientId: number): Promise<number[]> {
+    const [doctors, links] = await Promise.all([
+      this.prisma.doctorProfile.findMany({
+        where: {
+          OR: [
+            { appointments: { some: { patientId } } },
+            { visits: { some: { patientId } } },
+          ],
+        },
+        select: { userId: true },
+      }),
+      this.prisma.patientCaregiver.findMany({
+        where: {
+          patientId,
+          isActive: true,
+          permission: {
+            in: [ConsentType.RECEIVE_ALERTS, ConsentType.FULL_ACCESS],
+          },
+          OR: [{ endDate: null }, { endDate: { gt: new Date() } }],
+        },
+        select: { caregiver: { select: { userId: true } } },
+      }),
+    ]);
+    return [
+      ...new Set([
+        ...doctors.map((d) => d.userId),
+        ...links.map((l) => l.caregiver.userId),
+      ]),
+    ];
+  }
+
   private async hasCaregiverAccess(
     requesterUserId: number,
     patientProfileId: number,

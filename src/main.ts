@@ -97,6 +97,8 @@ async function bootstrap() {
     .addTag('Treatment', 'Plans, prescriptions, medication doses, adherence')
     .addTag('Vitals', 'Vital-sign time-series with clinical threshold alerts')
     .addTag('Alerts', 'Smart Alert Center — abnormal patterns & adherence')
+    .addTag('Emergency', 'SOS, escalation chain, emergency contacts')
+    .addTag('First Aid', 'Offline-cacheable first-aid guides (public)')
     .addTag('Notifications', 'In-app feed + push device tokens (FCM)')
     .addTag('Uploads', 'File storage (pluggable: local disk by default)')
     .build();
