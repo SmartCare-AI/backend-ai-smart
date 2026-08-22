@@ -11,6 +11,7 @@ import { AppointmentsModule } from './appointments/appointments.module';
 import { AuditInterceptor } from './audit/audit.interceptor';
 import { AuditModule } from './audit/audit.module';
 import { AuthModule } from './auth/auth.module';
+import { ChatModule } from './chat/chat.module';
 import { HospitalsModule } from './hospitals/hospitals.module';
 import { TreatmentModule } from './treatment/treatment.module';
 import { VisitsModule } from './visits/visits.module';
@@ -69,6 +70,7 @@ import { VitalsModule } from './vitals/vitals.module';
     EmergencyModule,
     AlertsModule,
     VitalsModule,
+    ChatModule,
   ],
   controllers: [AppController],
   providers: [

@@ -28,6 +28,8 @@ import { JwtStrategy } from './strategies/jwt.strategy';
   ],
   controllers: [AuthController],
   providers: [AuthService, JwtStrategy],
-  exports: [AuthService],
+  // JwtModule exported so the chat gateway can verify tokens on the
+  // WebSocket handshake with the same configuration.
+  exports: [AuthService, JwtModule],
 })
 export class AuthModule {}

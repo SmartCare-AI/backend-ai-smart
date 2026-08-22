@@ -99,6 +99,10 @@ async function bootstrap() {
     .addTag('Alerts', 'Smart Alert Center — abnormal patterns & adherence')
     .addTag('Emergency', 'SOS, escalation chain, emergency contacts')
     .addTag('First Aid', 'Offline-cacheable first-aid guides (public)')
+    .addTag(
+      'Chat',
+      'Telemedicine chat. Real-time: Socket.IO at the server root — connect with io(BASE_URL, { auth: { token: accessToken } }); events: chat:join/send/typing/read, call:invite/accept/decline/end/signal (WebRTC relay). REST endpoints below cover history and fallback sending.',
+    )
     .addTag('Notifications', 'In-app feed + push device tokens (FCM)')
     .addTag('Uploads', 'File storage (pluggable: local disk by default)')
     .build();
