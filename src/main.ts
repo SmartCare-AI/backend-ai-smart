@@ -74,6 +74,19 @@ async function bootstrap() {
       },
       'access-token',
     )
+    // Not a security mechanism — session metadata. Registered as an apiKey
+    // scheme so it lives in the Authorize dialog: set it once (ios | android
+    // | web) and Swagger sends it with every request.
+    .addApiKey(
+      {
+        type: 'apiKey',
+        in: 'header',
+        name: 'X-Platform',
+        description:
+          'Optional client platform: ios | android | web. Stored as session metadata on login/refresh (device overview). Safe to leave empty.',
+      },
+      'x-platform',
+    )
     .addTag('Health', 'Service liveness')
     .addTag('Auth', 'Registration, login, email verification, password reset, social sign-in')
     .addTag('Users', 'Profile management')
@@ -87,6 +100,25 @@ async function bootstrap() {
     .build();
 
   const document = SwaggerModule.createDocument(app, swaggerConfig);
+
+  // Attach the x-platform scheme to every operation so the value from the
+  // Authorize dialog is sent on all try-it-out requests (per-operation
+  // security from @ApiBearerAuth would otherwise override it).
+  const httpMethods = ['get', 'post', 'put', 'patch', 'delete'] as const;
+  for (const pathItem of Object.values(document.paths)) {
+    for (const method of httpMethods) {
+      const operation = pathItem[method];
+      if (!operation) continue;
+      if (operation.security?.length) {
+        for (const requirement of operation.security) {
+          requirement['x-platform'] = [];
+        }
+      } else {
+        operation.security = [{ 'x-platform': [] }];
+      }
+    }
+  }
+
   SwaggerModule.setup('docs', app, document, {
     customSiteTitle: 'SmartCare AI API Docs',
     swaggerOptions: {

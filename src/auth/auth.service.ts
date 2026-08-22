@@ -11,6 +11,7 @@ import { JwtService } from '@nestjs/jwt';
 import { AuthProvider, OtpType, User } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 import { createHash, randomBytes, randomInt } from 'crypto';
+import type { SessionMeta } from '../common/decorators/session-meta.decorator';
 import { FirebaseService } from '../firebase/firebase.service';
 import { MailService } from '../mail/mail.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -28,14 +29,6 @@ const OTP_TTL_MS = 10 * 60 * 1000; // 10 minutes
 const OTP_MAX_ATTEMPTS = 5;
 
 const KNOWN_PLATFORMS = new Set(['ios', 'android', 'web']);
-
-/** Client metadata recorded on each session (refresh token). */
-export interface SessionMeta {
-  userAgent?: string;
-  ip?: string;
-  /** From the optional X-Platform header — informational only. */
-  platform?: string;
-}
 
 @Injectable()
 export class AuthService {
