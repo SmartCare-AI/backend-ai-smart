@@ -24,8 +24,8 @@
     "prisma:studio": "prisma studio",
     "db:push": "prisma db push",
     "db:seed": "prisma db seed",
-    "deploy": "npm install && npm run prisma:generate && npm run prisma:deploy && npm run build && pm2 startOrRestart ecosystem.config.js --update-env && pm2 save",
-    "redeploy": "git pull && npm install && npm run prisma:generate && npm run prisma:deploy && npm run build && pm2 startOrRestart ecosystem.config.js --update-env && pm2 save"
+    "deploy": "npm ci && npm run prisma:generate && npm run prisma:deploy && npm run build && pm2 startOrRestart ecosystem.config.js --update-env && pm2 save",
+    "redeploy": "git checkout -- package-lock.json && git pull && npm ci && npm run prisma:generate && npm run prisma:deploy && npm run build && pm2 startOrRestart ecosystem.config.js --update-env && pm2 save"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1109.0",
