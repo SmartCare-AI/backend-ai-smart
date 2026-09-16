@@ -1,6 +1,25 @@
 // =============================================================================
-// SmartCare AI - Database Schema
+// SHIFAA — Database Schema
 // PostgreSQL + Prisma ORM
+//
+// Aligned with:
+//   • ERD/SHIFAA ERD.drawio
+//   • ERD/shifaa_data_dictionary_bw.pdf  (31-entity baseline, §4 entity specs)
+//   • ERD/SHIFAA_BRD.pdf                 (business rules BR-001..BR-013)
+//
+// The 31 ERD entities map 1:1 onto models below. Names follow the data
+// dictionary; types follow its §5 note ("suggested data types are
+// implementation-oriented and should be adapted to the selected DBMS").
+//
+// Documented deviations from the ERD (each justified in a comment at the
+// model): Assessment.visitId nullable, AuditLog.userId nullable,
+// VitalSign/DeviceReading value as DOUBLE, ConsentType reused as the
+// caregiver permission vocabulary, User.phone kept at account level.
+//
+// Beyond the 31-entity baseline (BRD §20.1 allows added entities): the
+// Emergency Hub (EmergencyEvent, EmergencyContact, FirstAidGuide), file
+// storage (FileObject), push tokens (DeviceToken) and auth security
+// (OtpCode, RefreshToken).
 //
 // Layout follows the patient journey:
 //   1. Identity & access   (User, profiles, caregivers, consent)
@@ -10,7 +29,7 @@
 //                           -> MedicineTracking)
 //   4. Monitoring          (VitalSign, Device, DeviceReading, Alert)
 //   5. Emergency Hub       (EmergencyEvent, EmergencyContact, FirstAidGuide)
-//   6. Communication       (Chat, Message, Notification, DeviceToken)
+//   6. Communication       (OnlineVisit, Chat, Message, Notification)
 //   7. Files & compliance  (FileObject, MedicalDocument, AuditLog, OTP, tokens)
 // =============================================================================
 
@@ -24,15 +43,32 @@ datasource db {
 }
 
 // ---------------------------------------------------------------------------
-// Enums
+// Enums — every ERD "VARCHAR / ENUM" column is a real Postgres enum so the
+// BRD §11.2 rule ("controlled values should use consistent allowed values")
+// is enforced by the database, not by convention.
 // ---------------------------------------------------------------------------
 
+/// ERD User.Role — Patient, Doctor, Caregiver, Admin (+ hospital operator).
 enum Role {
   PATIENT
   DOCTOR
   CAREGIVER
   HOSPITAL_ADMIN
   ADMIN
+}
+
+/// ERD User.Status — "Active, Inactive, Suspended, etc."
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+/// ERD Patient/Doctor/Caregiver.Status — "Active / inactive record state".
+enum ProfileStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
 }
 
 enum AuthProvider {
@@ -71,12 +107,36 @@ enum BloodType {
   O_NEG
 }
 
+/// ERD Hospital.Type — "Classifies hospital".
+enum HospitalType {
+  GENERAL
+  SPECIALIZED
+  CLINIC
+  MEDICAL_CENTER
+  TEACHING
+}
+
+/// ERD Hospital.Status / Department.Status / Medicine.Status — "Active / inactive".
+enum EntityStatus {
+  ACTIVE
+  INACTIVE
+}
+
+/// ERD PatientCaregiver.Status — "Active, Ended, Revoked".
+enum CareLinkStatus {
+  ACTIVE
+  ENDED
+  REVOKED
+}
+
+/// ERD Appointment.Type.
 enum AppointmentType {
   IN_PERSON
   VIDEO
   CHAT
 }
 
+/// ERD Appointment.Status — "Scheduled, Completed, Cancelled, No-Show".
 enum AppointmentStatus {
   PENDING
   CONFIRMED
@@ -85,18 +145,32 @@ enum AppointmentStatus {
   NO_SHOW
 }
 
+/// ERD Visit.Type — "Encounter classification".
+enum VisitType {
+  IN_PERSON
+  ONLINE
+  FOLLOW_UP
+  EMERGENCY
+}
+
+/// ERD Visit.Status — "Encounter state".
 enum VisitStatus {
   OPEN
   CLOSED
   FOLLOW_UP_REQUIRED
 }
 
+/// ERD Assessment.Type — "Assessment classification".
 enum AssessmentType {
   AI_INITIAL
   DOCTOR
   FOLLOW_UP
 }
 
+/// ERD Assessment.RiskLevel and Alert.Severity — "Low, Medium, High, Critical".
+/// One vocabulary is used for both so risk produced by triage, thresholds and
+/// alerts is directly comparable. MODERATE is this schema's spelling of the
+/// dictionary's "Medium".
 enum RiskLevel {
   LOW
   MODERATE
@@ -104,6 +178,7 @@ enum RiskLevel {
   CRITICAL
 }
 
+/// ERD Diagnosis.Severity.
 enum Severity {
   MILD
   MODERATE
@@ -111,6 +186,46 @@ enum Severity {
   CRITICAL
 }
 
+/// ERD Diagnosis.Status — "Active/resolved etc.".
+enum DiagnosisStatus {
+  ACTIVE
+  RESOLVED
+  CHRONIC
+  RULED_OUT
+}
+
+/// ERD MedicalDocument.Type — "Report, Prescription, Record, etc.".
+enum DocumentType {
+  REPORT
+  PRESCRIPTION
+  RECORD
+  LAB_RESULT
+  INSURANCE
+  REFERRAL
+  DISCHARGE_SUMMARY
+  OTHER
+}
+
+/// ERD MedicalDocument.Status — "Availability/validity".
+enum DocumentStatus {
+  ACTIVE
+  ARCHIVED
+  DELETED
+}
+
+/// ERD MedicalTest.Type — "Test classification".
+enum TestType {
+  BLOOD
+  URINE
+  STOOL
+  IMAGING
+  BIOPSY
+  GENETIC
+  MICROBIOLOGY
+  OTHER
+}
+
+/// ERD MedicalTest.Status — "Requested, In Progress, Completed".
 enum TestStatus {
   REQUESTED
   IN_PROGRESS
@@ -118,26 +233,27 @@ enum TestStatus {
   CANCELLED
 }
 
-enum TreatmentPlanStatus {
-  ACTIVE
-  COMPLETED
-  PAUSED
-  CANCELLED
+/// ERD MedicalImage.Type — "X-Ray, CT, MRI, Ultrasound".
+enum ImagingType {
+  XRAY
+  CT
+  MRI
+  ULTRASOUND
+  MAMMOGRAPHY
+  PET
+  ECHO
+  OTHER
 }
 
-enum PrescriptionStatus {
-  ACTIVE
-  COMPLETED
-  CANCELLED
+/// ERD MedicalImage.Status — "Availability/review state".
+enum ImageStatus {
+  PENDING
+  AVAILABLE
+  REVIEWED
+  ARCHIVED
 }
 
-enum MedicationDoseStatus {
-  SCHEDULED
-  TAKEN
-  MISSED
-  SKIPPED
-}
-
+/// ERD VitalSign.Type and DeviceReading.Type.
 enum VitalType {
   HEART_RATE
   BLOOD_PRESSURE_SYSTOLIC
@@ -153,17 +269,181 @@ enum VitalType {
   OTHER
 }
 
+/// ERD VitalSign.Source — "Manual or device source".
 enum VitalSource {
   MANUAL
   DEVICE
 }
 
-enum AlertStatus {
+/// ERD TreatmentPlan.Status — "Active, Completed, Cancelled".
+enum TreatmentPlanStatus {
   ACTIVE
+  COMPLETED
+  PAUSED
+  CANCELLED
+}
+
+/// ERD Prescription.Status — "Active/completed/cancelled".
+enum PrescriptionStatus {
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+/// ERD Medicine.Form — "Tablet, capsule, syrup, etc.".
+enum MedicineForm {
+  TABLET
+  CAPSULE
+  SYRUP
+  INJECTION
+  CREAM
+  OINTMENT
+  DROPS
+  INHALER
+  PATCH
+  SUPPOSITORY
+  OTHER
+}
+
+/// ERD PrescriptionItem.Route — "Oral, IV, topical, etc.".
+enum AdministrationRoute {
+  ORAL
+  INTRAVENOUS
+  INTRAMUSCULAR
+  SUBCUTANEOUS
+  TOPICAL
+  INHALATION
+  RECTAL
+  OPHTHALMIC
+  NASAL
+  OTHER
+}
+
+/// ERD MedicineTracking.Status — "Taken, Missed, Skipped" (+ SCHEDULED for
+/// the not-yet-due rows the reminder engine reads).
+enum MedicineTrackingStatus {
+  SCHEDULED
+  TAKEN
+  MISSED
+  SKIPPED
+}
+
+/// ERD Device.Type — "Smartwatch, glucose monitor, etc.".
+enum DeviceType {
+  SMARTWATCH
+  FITNESS_BAND
+  GLUCOSE_MONITOR
+  BP_MONITOR
+  PULSE_OXIMETER
+  SMART_SCALE
+  THERMOMETER
+  ECG_MONITOR
+  OTHER
+}
+
+/// ERD Device.Status — "Connected / disconnected".
+enum DeviceStatus {
+  CONNECTED
+  DISCONNECTED
+  INACTIVE
+}
+
+/// ERD Alert.Type — "Alert classification".
+enum AlertType {
+  VITAL_ANOMALY
+  MEDICATION_ADHERENCE
+  AI_RISK
+  APPOINTMENT
+  EMERGENCY
+  SYSTEM
+}
+
+/// ERD Alert.Status — "New, Acknowledged, Resolved".
+enum AlertStatus {
+  NEW
   ACKNOWLEDGED
   RESOLVED
   DISMISSED
 }
+
+/// ERD Notification.Type — "Alert, appointment reminder, etc.".
+enum NotificationType {
+  APPOINTMENT
+  MEDICATION_REMINDER
+  ALERT
+  EMERGENCY
+  CHAT
+  SYSTEM
+}
+
+/// ERD Notification.Status — "Unread, Read, Archived".
+enum NotificationStatus {
+  UNREAD
+  READ
+  ARCHIVED
+}
+
+/// ERD OnlineVisit.Type — "Telemedicine classification".
+enum OnlineVisitType {
+  VIDEO
+  AUDIO
+  CHAT
+}
+
+/// ERD OnlineVisit.Status — "Scheduled, Active, Completed, Cancelled".
+enum OnlineVisitStatus {
+  SCHEDULED
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+/// ERD Chat.Type — "Conversation classification".
+enum ChatType {
+  DIRECT
+  VISIT
+  SUPPORT
+}
+
+/// ERD Chat.Status — "Active / inactive".
+enum ChatStatus {
+  ACTIVE
+  ARCHIVED
+  CLOSED
+}
+
+/// ERD ChatParticipant.Status — "Active / Left".
+enum ParticipantStatus {
+  ACTIVE
+  LEFT
+}
+
+/// ERD Message.Status — "Sent, Delivered, Read, Deleted".
+enum MessageStatus {
+  SENT
+  DELIVERED
+  READ
+  DELETED
+}
+
+/// ERD Consent.Type — "Defines permitted data / action". Also used as
+/// PatientCaregiver.PermissionLevel so the platform has a single, comparable
+/// permission vocabulary (see PatientCaregiver.permissionLevel).
+enum ConsentType {
+  VIEW_RECORDS
+  MANAGE_APPOINTMENTS
+  RECEIVE_ALERTS
+  FULL_ACCESS
+}
+
+/// ERD Consent.Status — "Active, Expired, Revoked".
+enum ConsentStatus {
+  ACTIVE
+  EXPIRED
+  REVOKED
+}
+
+// --- Beyond the ERD baseline (Emergency Hub + push infrastructure) ----------
 
 enum EmergencyType {
   SOS_BUTTON
@@ -180,34 +460,6 @@ enum EmergencyStatus {
   FALSE_ALARM
 }
 
-enum ChatType {
-  DIRECT
-  VISIT
-  SUPPORT
-}
-
-enum NotificationType {
-  APPOINTMENT
-  MEDICATION_REMINDER
-  ALERT
-  EMERGENCY
-  CHAT
-  SYSTEM
-}
-
-enum ConsentType {
-  VIEW_RECORDS
-  MANAGE_APPOINTMENTS
-  RECEIVE_ALERTS
-  FULL_ACCESS
-}
-
-enum ConsentStatus {
-  ACTIVE
-  EXPIRED
-  REVOKED
-}
-
 enum DevicePlatform {
   IOS
   ANDROID
@@ -218,23 +470,26 @@ enum DevicePlatform {
 // 1. Identity & access
 // ---------------------------------------------------------------------------
 
+/// ERD #1 User — the ACCOUNT. Per the data dictionary's "User/Profile
+/// Separation" note, personal identity (names, demographics, clinical
+/// profile) lives in PatientProfile / DoctorProfile / CaregiverProfile.
+///
+/// Deviation: `phone` and `avatarUrl` stay here. They are account-level
+/// contact/presentation data shared by every role, and keeping one copy
+/// avoids duplicating the caregiver's ERD `Phone` across profiles.
 model User {
   id              Int          @id @default(autoincrement())
   email           String       @unique
-  /// Null for social-login accounts (Google / Apple)
+  /// ERD PasswordHash. Null for social-login accounts (Google / Apple).
   password        String?
-  firstName       String
-  lastName        String
   phone           String?
-  dateOfBirth     DateTime?
-  gender          Gender?
   avatarUrl       String?
   role            Role         @default(PATIENT)
+  status          UserStatus   @default(ACTIVE)
   provider        AuthProvider @default(EMAIL)
   /// Firebase UID for Google / Apple sign-in accounts
   firebaseUid     String?      @unique
   isEmailVerified Boolean      @default(false)
-  isActive        Boolean      @default(true)
   lastLoginAt     DateTime?
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
@@ -244,43 +499,54 @@ model User {
   doctorProfile    DoctorProfile?
   caregiverProfile CaregiverProfile?
 
-  otpCodes          OtpCode[]
-  refreshTokens     RefreshToken[]
-  files             FileObject[]
-  deviceTokens      DeviceToken[]
-  notifications     Notification[]
-  sentMessages      Message[]         @relation("SentMessages")
-  chatParticipants  ChatParticipant[]
-  consentsReceived  Consent[]         @relation("ConsentGrantedTo")
-  auditLogs         AuditLog[]
-  uploadedDocuments MedicalDocument[] @relation("DocumentUploader")
+  otpCodes               OtpCode[]
+  refreshTokens          RefreshToken[]
+  files                  FileObject[]
+  deviceTokens           DeviceToken[]
+  notifications          Notification[]
+  sentMessages           Message[]         @relation("SentMessages")
+  chatParticipants       ChatParticipant[]
+  consentsReceived       Consent[]         @relation("ConsentGrantedTo")
+  auditLogs              AuditLog[]
+  uploadedDocuments      MedicalDocument[] @relation("DocumentUploader")
+  bookedAppointments     Appointment[]     @relation("AppointmentBookedBy")
+  acknowledgedEmergencies EmergencyEvent[] @relation("EmergencyAcknowledgedBy")
 
+  @@index([role, status])
   @@map("users")
 }
 
-/// Patient-specific data. User rows with role=PATIENT get exactly one.
+/// ERD #2 Patient. User rows with role=PATIENT get exactly one.
 model PatientProfile {
-  id               Int        @id @default(autoincrement())
-  userId           Int        @unique
-  user             User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  /// Human-readable medical record number, e.g. "SC-2026-000042"
-  medicalRecordNo  String     @unique
-  bloodType        BloodType?
-  address          String?
-  /// Free-text medical background (chronic diseases, allergies, surgeries)
-  chronicDiseases  String?
-  allergies        String?
+  id              Int           @id @default(autoincrement())
+  userId          Int           @unique
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  firstName       String
+  lastName        String
+  /// Human-readable medical record number, e.g. "SH-2026-000042"
+  medicalRecordNo String        @unique
+  dateOfBirth     DateTime?
+  gender          Gender?
+  bloodType       BloodType?
+  address         String?
+  /// ERD EmergencyContact / EmergencyPhone — the single "who to call" pair
+  /// on the profile. The full prioritized SMS list is EmergencyContact[].
+  emergencyContact String?
+  emergencyPhone   String?
+  registrationDate DateTime     @default(now())
+  status          ProfileStatus @default(ACTIVE)
+
+  /// Clinical background used by the AI triage and risk modules.
+  chronicDiseases   String?
+  allergies         String?
   insuranceProvider String?
-  insuranceNumber  String?
-  registeredAt     DateTime   @default(now())
+  insuranceNumber   String?
 
   caregivers        PatientCaregiver[]
   appointments      Appointment[]
-  visits            Visit[]
   assessments       Assessment[]
   treatmentPlans    TreatmentPlan[]
-  prescriptions     Prescription[]
-  medicationDoses   MedicationDose[]
+  medicineTracking  MedicineTracking[]
   vitalSigns        VitalSign[]
   devices           Device[]
   alerts            Alert[]
@@ -289,80 +555,97 @@ model PatientProfile {
   documents         MedicalDocument[]
   consents          Consent[]
 
+  @@index([status])
   @@map("patient_profiles")
 }
 
-/// Doctor-specific data. User rows with role=DOCTOR get exactly one.
+/// ERD #3 Doctor. User rows with role=DOCTOR get exactly one.
 model DoctorProfile {
-  id                Int         @id @default(autoincrement())
-  userId            Int         @unique
-  user              User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  licenseNumber     String      @unique
+  id                Int           @id @default(autoincrement())
+  userId            Int           @unique
+  user              User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  firstName         String
+  lastName          String
+  licenseNumber     String        @unique
   specialization    String
   yearsOfExperience Int?
   bio               String?
-  hospitalId        Int?
-  hospital          Hospital?   @relation(fields: [hospitalId], references: [id])
-  departmentId      Int?
-  department        Department? @relation(fields: [departmentId], references: [id])
-  isVerified        Boolean     @default(false)
+  status            ProfileStatus @default(ACTIVE)
+
+  /// Organizational placement (BRD §18.3 lists this as optional//to confirm,
+  /// so both sides stay nullable).
+  hospitalId   Int?
+  hospital     Hospital?   @relation(fields: [hospitalId], references: [id])
+  departmentId Int?
+  department   Department? @relation(fields: [departmentId], references: [id])
+  isVerified   Boolean     @default(false)
 
   appointments   Appointment[]
-  visits         Visit[]
   medicalTests   MedicalTest[]
   medicalImages  MedicalImage[]
   treatmentPlans TreatmentPlan[]
-  prescriptions  Prescription[]
 
+  @@index([hospitalId, isVerified])
   @@map("doctor_profiles")
 }
 
-/// Caregiver/family-member data. User rows with role=CAREGIVER get exactly one.
+/// ERD #4 Caregiver. User rows with role=CAREGIVER get exactly one.
+/// ERD `Phone` is served by the account-level User.phone (single source of
+/// truth for contact data).
 model CaregiverProfile {
-  id           Int    @id @default(autoincrement())
-  userId       Int    @unique
-  user         User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id     Int  @id @default(autoincrement())
+  userId Int  @unique
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  firstName String
+  lastName  String
   /// e.g. "spouse", "son", "professional nurse"
-  relationship String?
+  relationship String
   address      String?
+  status       ProfileStatus @default(ACTIVE)
 
   patients PatientCaregiver[]
 
   @@map("caregiver_profiles")
 }
 
-/// Links a patient to up to N caregivers with an explicit permission level.
-/// The Family Portal requirement: max 2 active links enforced in service code.
+/// ERD #7 PatientCaregiver — resolves the patient↔caregiver relationship and
+/// stores the permission metadata behind BR-003 ("caregiver access is
+/// permitted only while the authorization is active").
+///
+/// `permissionLevel` reuses ConsentType so a caregiver link and an explicit
+/// Consent row are checked against the same vocabulary.
 model PatientCaregiver {
-  id          Int              @id @default(autoincrement())
-  patientId   Int
-  patient     PatientProfile   @relation(fields: [patientId], references: [id], onDelete: Cascade)
-  caregiverId Int
-  caregiver   CaregiverProfile @relation(fields: [caregiverId], references: [id], onDelete: Cascade)
-  /// What the caregiver may do — mirrors ConsentType granularity
-  permission  ConsentType      @default(RECEIVE_ALERTS)
-  startDate   DateTime         @default(now())
-  endDate     DateTime?
-  isActive    Boolean          @default(true)
+  id              Int              @id @default(autoincrement())
+  patientId       Int
+  patient         PatientProfile   @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  caregiverId     Int
+  caregiver       CaregiverProfile @relation(fields: [caregiverId], references: [id], onDelete: Cascade)
+  permissionLevel ConsentType      @default(RECEIVE_ALERTS)
+  startDate       DateTime         @default(now())
+  endDate         DateTime?
+  status          CareLinkStatus   @default(ACTIVE)
 
   @@unique([patientId, caregiverId])
+  @@index([patientId, status])
   @@map("patient_caregivers")
 }
 
-/// Explicit, auditable data-sharing consent (compliance requirement).
+/// ERD #30 Consent — explicit, auditable data-sharing permission (SEC-003).
 model Consent {
-  id              Int            @id @default(autoincrement())
+  id              Int           @id @default(autoincrement())
   patientId       Int
   patient         PatientProfile @relation(fields: [patientId], references: [id], onDelete: Cascade)
   grantedToUserId Int
-  grantedTo       User           @relation("ConsentGrantedTo", fields: [grantedToUserId], references: [id], onDelete: Cascade)
+  grantedTo       User          @relation("ConsentGrantedTo", fields: [grantedToUserId], references: [id], onDelete: Cascade)
   type            ConsentType
-  status          ConsentStatus  @default(ACTIVE)
-  grantedAt       DateTime       @default(now())
+  status          ConsentStatus @default(ACTIVE)
+  grantedAt       DateTime      @default(now())
   expiresAt       DateTime?
   revokedAt       DateTime?
 
   @@index([patientId, status])
+  @@index([grantedToUserId, status])
   @@map("consents")
 }
 
@@ -370,28 +653,31 @@ model Consent {
 // 2. Organization
 // ---------------------------------------------------------------------------
 
+/// ERD #5 Hospital.
 model Hospital {
-  id       Int     @id @default(autoincrement())
-  name     String
-  type     String? // e.g. "general", "specialized", "clinic"
-  address  String?
-  phone    String?
-  email    String?
-  isActive Boolean @default(true)
+  id      Int          @id @default(autoincrement())
+  name    String
+  type    HospitalType @default(GENERAL)
+  address String
+  phone   String?
+  email   String?
+  status  EntityStatus @default(ACTIVE)
 
   departments Department[]
   doctors     DoctorProfile[]
 
+  @@index([status])
   @@map("hospitals")
 }
 
+/// ERD #6 Department.
 model Department {
-  id          Int      @id @default(autoincrement())
+  id          Int          @id @default(autoincrement())
   hospitalId  Int
-  hospital    Hospital @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  hospital    Hospital     @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
   name        String
   description String?
-  isActive    Boolean  @default(true)
+  status      EntityStatus @default(ACTIVE)
 
   doctors DoctorProfile[]
 
@@ -403,64 +689,76 @@ model Department {
 // 3. Care flow
 // ---------------------------------------------------------------------------
 
+/// ERD #8 Appointment. The dictionary models the slot as Date + StartTime +
+/// EndTime; `date` is the calendar day (indexed for day views) and
+/// start/end are absolute UTC timestamps so scheduling is timezone-safe.
 model Appointment {
-  id          Int               @id @default(autoincrement())
-  patientId   Int
-  patient     PatientProfile    @relation(fields: [patientId], references: [id], onDelete: Cascade)
-  doctorId    Int
-  doctor      DoctorProfile     @relation(fields: [doctorId], references: [id])
-  /// User who created the booking (patient themself or an authorized caregiver)
-  bookedById  Int?
-  scheduledAt DateTime
-  endsAt      DateTime?
-  type        AppointmentType   @default(IN_PERSON)
-  status      AppointmentStatus @default(PENDING)
-  reason      String?
-  notes       String?
-  createdAt   DateTime          @default(now())
-  updatedAt   DateTime          @updatedAt
+  id         Int               @id @default(autoincrement())
+  patientId  Int
+  patient    PatientProfile    @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  doctorId   Int
+  doctor     DoctorProfile     @relation(fields: [doctorId], references: [id])
+  date       DateTime          @db.Date
+  startTime  DateTime
+  endTime    DateTime
+  type       AppointmentType   @default(IN_PERSON)
+  status     AppointmentStatus @default(PENDING)
+  reason     String?
+  notes      String?
+  /// User who created the booking (patient themself or an authorized
+  /// caregiver) — required by the audit trail, not part of the ERD.
+  bookedById Int?
+  bookedBy   User?             @relation("AppointmentBookedBy", fields: [bookedById], references: [id])
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
 
-  visit Visit?
+  visit       Visit?
+  onlineVisit OnlineVisit?
 
-  @@index([patientId, scheduledAt])
-  @@index([doctorId, scheduledAt])
+  @@index([patientId, startTime])
+  @@index([doctorId, startTime])
+  @@index([doctorId, date])
   @@map("appointments")
 }
 
-/// The actual encounter. Usually created from an appointment, but walk-in /
-/// emergency visits can exist without one (appointmentId nullable).
+/// ERD #9 Visit — the clinical encounter. BR-004: "A Visit is associated with
+/// an Appointment in the current model", so `appointmentId` is mandatory and
+/// unique (1:0..1). Patient and doctor context is derived through the
+/// appointment rather than duplicated here.
 model Visit {
-  id            Int            @id @default(autoincrement())
-  appointmentId Int?           @unique
-  appointment   Appointment?   @relation(fields: [appointmentId], references: [id])
-  patientId     Int
-  patient       PatientProfile @relation(fields: [patientId], references: [id], onDelete: Cascade)
-  doctorId      Int
-  doctor        DoctorProfile  @relation(fields: [doctorId], references: [id])
-  date          DateTime       @default(now())
-  type          AppointmentType @default(IN_PERSON)
+  id            Int         @id @default(autoincrement())
+  appointmentId Int         @unique
+  appointment   Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  date          DateTime    @default(now())
+  type          VisitType   @default(IN_PERSON)
   mainComplaint String?
   notes         String?
-  status        VisitStatus    @default(OPEN)
+  status        VisitStatus @default(OPEN)
 
-  assessments    Assessment[]
-  diagnoses      Diagnosis[]
-  medicalTests   MedicalTest[]
-  medicalImages  MedicalImage[]
-  treatmentPlans TreatmentPlan[]
+  assessments   Assessment[]
+  diagnoses     Diagnosis[]
+  medicalTests  MedicalTest[]
+  medicalImages MedicalImage[]
+  chats         Chat[]
 
-  @@index([patientId, date])
+  @@index([date])
   @@map("visits")
 }
 
-/// Structured evaluation. AI_INITIAL rows are produced by the AI Health
-/// Assistant before any visit exists (visitId nullable by design).
+/// ERD #10 Assessment.
+///
+/// Deviation: the dictionary marks VisitID as NOT NULL, but the BRD patient
+/// journey (stage 2 "Initial Assessment") has the AI Health Assistant produce
+/// an assessment BEFORE any appointment exists. `visitId` is therefore
+/// nullable and `patientId` is carried so a pre-visit AI_INITIAL assessment
+/// still belongs to someone; doctor-authored assessments always set `visitId`.
 model Assessment {
   id           Int            @id @default(autoincrement())
   visitId      Int?
   visit        Visit?         @relation(fields: [visitId], references: [id], onDelete: Cascade)
   patientId    Int
   patient      PatientProfile @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  date         DateTime       @default(now())
   type         AssessmentType
   /// Symptoms as reported (JSON string: [{name, duration, severity}, ...])
   symptoms     String?
@@ -469,191 +767,205 @@ model Assessment {
   /// AI output: suggested specialty referral, e.g. "cardiology"
   suggestedSpecialty String?
   notes        String?
-  createdAt    DateTime       @default(now())
 
-  @@index([patientId, createdAt])
+  @@index([patientId, date])
+  @@index([visitId])
   @@map("assessments")
 }
 
+/// ERD #11 Diagnosis.
 model Diagnosis {
-  id          Int       @id @default(autoincrement())
+  id          Int             @id @default(autoincrement())
   visitId     Int
-  visit       Visit     @relation(fields: [visitId], references: [id], onDelete: Cascade)
+  visit       Visit           @relation(fields: [visitId], references: [id], onDelete: Cascade)
   name        String
   /// ICD-10 code, e.g. "E11.9"
   code        String?
   description String?
+  date        DateTime        @default(now())
   severity    Severity?
-  isActive    Boolean   @default(true)
-  diagnosedAt DateTime  @default(now())
+  status      DiagnosisStatus @default(ACTIVE)
 
   treatmentPlans TreatmentPlan[]
 
+  @@index([visitId])
   @@map("diagnoses")
 }
 
+/// ERD #13 MedicalTest.
 model MedicalTest {
   id            Int           @id @default(autoincrement())
   visitId       Int
   visit         Visit         @relation(fields: [visitId], references: [id], onDelete: Cascade)
-  requestedById Int?
-  requestedBy   DoctorProfile? @relation(fields: [requestedById], references: [id])
+  doctorId      Int
+  doctor        DoctorProfile @relation(fields: [doctorId], references: [id])
   name          String
-  /// e.g. "blood", "urine", "biopsy"
-  type          String?
+  type          TestType      @default(OTHER)
+  requestedDate DateTime      @default(now())
   status        TestStatus    @default(REQUESTED)
-  requestedAt   DateTime      @default(now())
   notes         String?
 
   result TestResult?
 
+  @@index([visitId])
+  @@index([doctorId, status])
   @@map("medical_tests")
 }
 
+/// ERD #14 TestResult — 1:0..1 with MedicalTest, per the dictionary §5 note.
 model TestResult {
   id             Int         @id @default(autoincrement())
   testId         Int         @unique
   test           MedicalTest @relation(fields: [testId], references: [id], onDelete: Cascade)
+  date           DateTime    @default(now())
   value          String
   unit           String?
   normalRange    String?
   interpretation String?
   notes          String?
-  /// Uploaded lab report file, if any
+  /// Uploaded lab report; ERD FilePath is owned by FileObject.
   fileId         Int?
   file           FileObject? @relation(fields: [fileId], references: [id])
-  resultedAt     DateTime    @default(now())
 
   @@map("test_results")
 }
 
-/// X-ray / CT / MRI / Ultrasound. The binary lives in FileObject (uploads
-/// module); this row is the medical context around it.
+/// ERD #15 MedicalImage. The binary lives in FileObject (uploads module);
+/// this row is the medical context around it — `file.key` is the ERD FilePath.
 model MedicalImage {
-  id           Int            @id @default(autoincrement())
-  visitId      Int
-  visit        Visit          @relation(fields: [visitId], references: [id], onDelete: Cascade)
-  orderedById  Int?
-  orderedBy    DoctorProfile? @relation(fields: [orderedById], references: [id])
-  /// e.g. "XRAY", "CT", "MRI", "ULTRASOUND"
-  type         String
-  bodyPart     String?
-  fileId       Int
-  file         FileObject     @relation(fields: [fileId], references: [id])
+  id       Int           @id @default(autoincrement())
+  visitId  Int
+  visit    Visit         @relation(fields: [visitId], references: [id], onDelete: Cascade)
+  doctorId Int
+  doctor   DoctorProfile @relation(fields: [doctorId], references: [id])
+  type     ImagingType
+  bodyPart String?
+  date     DateTime      @default(now())
+  fileId   Int
+  file     FileObject    @relation(fields: [fileId], references: [id])
   /// Radiologist / doctor written report
-  report       String?
-  takenAt      DateTime       @default(now())
+  report   String?
+  status   ImageStatus   @default(AVAILABLE)
 
+  @@index([visitId])
   @@map("medical_images")
 }
 
+/// ERD #17 TreatmentPlan. BR-006: belongs to a patient, created by a doctor,
+/// diagnosis association optional.
 model TreatmentPlan {
   id          Int                 @id @default(autoincrement())
   patientId   Int
   patient     PatientProfile      @relation(fields: [patientId], references: [id], onDelete: Cascade)
   doctorId    Int
   doctor      DoctorProfile       @relation(fields: [doctorId], references: [id])
-  visitId     Int?
-  visit       Visit?              @relation(fields: [visitId], references: [id])
   diagnosisId Int?
   diagnosis   Diagnosis?          @relation(fields: [diagnosisId], references: [id])
-  title       String
-  description String?
-  goals       String?
-  status      TreatmentPlanStatus @default(ACTIVE)
   startDate   DateTime            @default(now())
   endDate     DateTime?
+  description String
+  goals       String?
+  status      TreatmentPlanStatus @default(ACTIVE)
   notes       String?
 
   prescriptions Prescription[]
 
   @@index([patientId, status])
+  @@index([doctorId, status])
   @@map("treatment_plans")
 }
 
+/// ERD #18 Prescription. BR-007: "A Prescription belongs to a TreatmentPlan
+/// and contains PrescriptionItems" — hence the mandatory plan; patient and
+/// doctor are read through it.
 model Prescription {
   id              Int                @id @default(autoincrement())
-  patientId       Int
-  patient         PatientProfile     @relation(fields: [patientId], references: [id], onDelete: Cascade)
-  doctorId        Int
-  doctor          DoctorProfile      @relation(fields: [doctorId], references: [id])
-  treatmentPlanId Int?
-  treatmentPlan   TreatmentPlan?     @relation(fields: [treatmentPlanId], references: [id])
+  treatmentPlanId Int
+  treatmentPlan   TreatmentPlan      @relation(fields: [treatmentPlanId], references: [id], onDelete: Cascade)
+  date            DateTime           @default(now())
   status          PrescriptionStatus @default(ACTIVE)
   instructions    String?
   notes           String?
-  issuedAt        DateTime           @default(now())
 
   items PrescriptionItem[]
 
-  @@index([patientId, status])
+  @@index([treatmentPlanId, status])
   @@map("prescriptions")
 }
 
-/// Medicine catalog — one row per drug so adherence analytics can aggregate
-/// across patients. Kept minimal for MVP (name + form + strength).
+/// ERD #19 Medicine — the drug catalog, so adherence analytics can aggregate
+/// across patients.
 model Medicine {
-  id       Int     @id @default(autoincrement())
-  name     String
-  /// e.g. "tablet", "capsule", "syrup", "injection"
-  form     String?
-  /// e.g. "500mg"
-  strength String?
+  id          Int           @id @default(autoincrement())
+  name        String
+  genericName String?
+  form        MedicineForm?
+  /// e.g. "500mg", "10mg/ml"
+  strength    String?
+  description String?
+  status      EntityStatus  @default(ACTIVE)
 
   prescriptionItems PrescriptionItem[]
 
   @@unique([name, form, strength])
+  @@index([status])
   @@map("medicines")
 }
 
+/// ERD #20 PrescriptionItem — one medicine entry in a prescription.
 model PrescriptionItem {
-  id             Int          @id @default(autoincrement())
+  id             Int                  @id @default(autoincrement())
   prescriptionId Int
-  prescription   Prescription @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
+  prescription   Prescription         @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
   medicineId     Int
-  medicine       Medicine     @relation(fields: [medicineId], references: [id])
+  medicine       Medicine             @relation(fields: [medicineId], references: [id])
   /// e.g. "1 tablet"
   dose           String
   /// e.g. "every 8 hours", "twice daily"
   frequency      String
-  /// e.g. "oral", "IV", "topical"
-  route          String?
+  route          AdministrationRoute?
   /// e.g. "7 days"
   duration       String?
   instructions   String?
 
-  doses MedicationDose[]
+  tracking MedicineTracking[]
 
+  @@index([prescriptionId])
   @@map("prescription_items")
 }
 
-/// One row per scheduled intake — the raw data behind medication-adherence
-/// analytics and reminder notifications. (ERD: MedicineTracking)
-model MedicationDose {
-  id                 Int                  @id @default(autoincrement())
+/// ERD #21 MedicineTracking — one row per scheduled intake. BR-008: the
+/// adherence event is recorded against a prescription item AND a patient.
+/// These rows are the raw data behind adherence analytics and reminders.
+model MedicineTracking {
+  id                 Int                    @id @default(autoincrement())
   prescriptionItemId Int
-  prescriptionItem   PrescriptionItem     @relation(fields: [prescriptionItemId], references: [id], onDelete: Cascade)
+  prescriptionItem   PrescriptionItem       @relation(fields: [prescriptionItemId], references: [id], onDelete: Cascade)
   patientId          Int
-  patient            PatientProfile       @relation(fields: [patientId], references: [id], onDelete: Cascade)
-  scheduledAt        DateTime
-  takenAt            DateTime?
-  status             MedicationDoseStatus @default(SCHEDULED)
+  patient            PatientProfile         @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  scheduledTime      DateTime
+  takenTime          DateTime?
+  status             MedicineTrackingStatus @default(SCHEDULED)
+  notes              String?
   /// Set when the reminder push went out — prevents duplicate reminders.
   reminderSentAt     DateTime?
-  notes              String?
 
-  @@index([patientId, scheduledAt])
-  @@index([status, scheduledAt])
-  @@map("medication_doses")
+  @@index([patientId, scheduledTime])
+  @@index([status, scheduledTime])
+  @@map("medicine_tracking")
 }
 
 // ---------------------------------------------------------------------------
 // 4. Monitoring
 // ---------------------------------------------------------------------------
 
-/// Single time-series table for all vitals — manual entries and device
-/// readings share it so charts/AI read one stream. (ERD: VitalSign +
-/// DeviceReading merged; `source`/`deviceId` distinguish origin.)
+/// ERD #16 VitalSign — the patient's clinical measurement stream. Manual
+/// entries and readings promoted from a device share this table so charts,
+/// thresholds and AI read one series; `source` (and `deviceReadingId`)
+/// records the origin.
+///
+/// Deviation: `value` is DOUBLE rather than the dictionary's VARCHAR —
+/// thresholds, trends and time-series charts require a numeric type.
 model VitalSign {
   id         Int            @id @default(autoincrement())
   patientId  Int
@@ -661,84 +973,109 @@ model VitalSign {
   type       VitalType
   value      Float
   unit       String
-  source     VitalSource    @default(MANUAL)
-  deviceId   Int?
-  device     Device?        @relation(fields: [deviceId], references: [id])
   measuredAt DateTime       @default(now())
+  source     VitalSource    @default(MANUAL)
+  /// Raw device row this measurement was promoted from (BR-009 keeps device
+  /// data addressable through the Device, this keeps it traceable).
+  deviceReadingId Int?      @unique
+  deviceReading   DeviceReading? @relation(fields: [deviceReadingId], references: [id])
 
   @@index([patientId, type, measuredAt])
   @@map("vital_signs")
 }
 
-/// Wearables / IoT health devices paired to a patient.
+/// ERD #22 Device — wearables / IoT health devices paired to a patient.
 model Device {
-  id           Int            @id @default(autoincrement())
-  patientId    Int
-  patient      PatientProfile @relation(fields: [patientId], references: [id], onDelete: Cascade)
-  /// e.g. "smartwatch", "glucometer", "bp_monitor"
-  type         String
-  name         String
-  manufacturer String?
-  serialNumber String?        @unique
-  connectedAt  DateTime       @default(now())
-  lastSyncAt   DateTime?
-  isActive     Boolean        @default(true)
+  id            Int          @id @default(autoincrement())
+  patientId     Int
+  patient       PatientProfile @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  type          DeviceType
+  name          String
+  manufacturer  String?
+  serialNumber  String?      @unique
+  connectedDate DateTime     @default(now())
+  status        DeviceStatus @default(CONNECTED)
+  lastSync      DateTime?
 
-  readings VitalSign[]
+  readings DeviceReading[]
 
+  @@index([patientId, status])
   @@map("devices")
 }
 
-/// System-detected abnormality (threshold breach, missed medication streak,
-/// AI anomaly). Feeds the doctor's Smart Alert Center and can escalate to an
-/// EmergencyEvent.
+/// ERD #23 DeviceReading — a raw, device-generated measurement. BR-009:
+/// readings belong to a Device and inherit patient context through it.
+model DeviceReading {
+  id         Int       @id @default(autoincrement())
+  deviceId   Int
+  device     Device    @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  type       VitalType
+  value      Float
+  unit       String?
+  measuredAt DateTime  @default(now())
+
+  /// Set when this reading was promoted into the clinical vitals stream.
+  vitalSign VitalSign?
+
+  @@index([deviceId, measuredAt])
+  @@map("device_readings")
+}
+
+/// ERD #24 Alert — system-detected abnormality (threshold breach, missed
+/// medication streak, AI anomaly). Feeds the doctor's Smart Alert Center and
+/// can escalate to an EmergencyEvent.
 model Alert {
   id          Int            @id @default(autoincrement())
   patientId   Int
   patient     PatientProfile @relation(fields: [patientId], references: [id], onDelete: Cascade)
-  title       String
-  description String?
+  type        AlertType
   severity    RiskLevel
-  status      AlertStatus    @default(ACTIVE)
-  /// What produced it: "vital_threshold", "adherence", "ai_anomaly"
-  source      String?
-  /// Optional pointer to the triggering vital sign
-  vitalSignId Int?
+  title       String
+  description String
   createdAt   DateTime       @default(now())
+  status      AlertStatus    @default(NEW)
   resolvedAt  DateTime?
+
+  /// Dedupe key for the cooldown window, e.g. "vital_threshold:HEART_RATE".
+  source      String?
+  /// Optional pointer to the triggering vital sign.
+  vitalSignId Int?
 
   notifications   Notification[]
   emergencyEvents EmergencyEvent[]
 
   @@index([patientId, status])
+  @@index([status, severity])
   @@map("alerts")
 }
 
 // ---------------------------------------------------------------------------
-// 5. Emergency Hub
+// 5. Emergency Hub  (beyond the 31-entity baseline — BRD FR-024 "emergency
+//    conditions", AC-007 alert routing)
 // ---------------------------------------------------------------------------
 
 /// A critical situation: patient pressed SOS, or the system escalated a
 /// CRITICAL alert. Drives the emergency notification fan-out (push + SMS)
 /// to caregivers and emergency contacts.
 model EmergencyEvent {
-  id             Int             @id @default(autoincrement())
-  patientId      Int
-  patient        PatientProfile  @relation(fields: [patientId], references: [id], onDelete: Cascade)
-  type           EmergencyType
-  status         EmergencyStatus @default(ACTIVE)
+  id          Int             @id @default(autoincrement())
+  patientId   Int
+  patient     PatientProfile  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  type        EmergencyType
+  status      EmergencyStatus @default(ACTIVE)
   /// GPS position captured when the event fired (mobile SOS)
-  latitude       Float?
-  longitude      Float?
-  description    String?
+  latitude    Float?
+  longitude   Float?
+  description String?
   /// Escalated from this alert, if system-generated
-  alertId        Int?
-  alert          Alert?          @relation(fields: [alertId], references: [id])
+  alertId     Int?
+  alert       Alert?          @relation(fields: [alertId], references: [id])
   /// User (caregiver/doctor) who acknowledged the emergency
   acknowledgedById Int?
-  acknowledgedAt DateTime?
-  resolvedAt     DateTime?
-  createdAt      DateTime        @default(now())
+  acknowledgedBy   User?      @relation("EmergencyAcknowledgedBy", fields: [acknowledgedById], references: [id])
+  acknowledgedAt   DateTime?
+  resolvedAt       DateTime?
+  createdAt        DateTime   @default(now())
 
   @@index([patientId, status])
   @@map("emergency_events")
@@ -747,15 +1084,16 @@ model EmergencyEvent {
 /// People to notify in an emergency who are NOT platform users (plain
 /// phone contacts). Platform caregivers are reached via PatientCaregiver.
 model EmergencyContact {
-  id        Int            @id @default(autoincrement())
-  patientId Int
-  patient   PatientProfile @relation(fields: [patientId], references: [id], onDelete: Cascade)
-  name      String
-  phone     String
+  id           Int            @id @default(autoincrement())
+  patientId    Int
+  patient      PatientProfile @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  name         String
+  phone        String
   /// e.g. "father", "neighbor"
   relationship String?
-  priority  Int            @default(1)
+  priority     Int            @default(1)
 
+  @@index([patientId, priority])
   @@map("emergency_contacts")
 }
 
@@ -784,69 +1122,99 @@ model FirstAidGuide {
 // 6. Communication
 // ---------------------------------------------------------------------------
 
+/// ERD #26 OnlineVisit — the telemedicine session. BR-011/TR-001: online
+/// visits are linked to appointments (1:0..1).
+model OnlineVisit {
+  id            Int               @id @default(autoincrement())
+  appointmentId Int               @unique
+  appointment   Appointment       @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  startTime     DateTime
+  endTime       DateTime?
+  type          OnlineVisitType   @default(VIDEO)
+  status        OnlineVisitStatus @default(SCHEDULED)
+  /// Meeting link / room identifier used by the app to join the session.
+  meetingLink   String
+  notes         String?
+
+  @@index([status, startTime])
+  @@map("online_visits")
+}
+
+/// ERD #27 Chat.
 model Chat {
-  id        Int      @id @default(autoincrement())
-  type      ChatType @default(DIRECT)
-  /// Optional link to the visit this consultation belongs to
+  id        Int        @id @default(autoincrement())
+  type      ChatType   @default(DIRECT)
+  status    ChatStatus @default(ACTIVE)
+  createdAt DateTime   @default(now())
+  /// Optional link to the visit this consultation belongs to (TR-004).
   visitId   Int?
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
+  visit     Visit?     @relation(fields: [visitId], references: [id])
 
   participants ChatParticipant[]
   messages     Message[]
 
+  @@index([status])
   @@map("chats")
 }
 
+/// ERD #28 ChatParticipant — user membership in a chat.
 model ChatParticipant {
-  id       Int      @id @default(autoincrement())
+  id       Int               @id @default(autoincrement())
   chatId   Int
-  chat     Chat     @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  chat     Chat              @relation(fields: [chatId], references: [id], onDelete: Cascade)
   userId   Int
-  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  joinedAt DateTime @default(now())
+  user     User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  joinedAt DateTime          @default(now())
+  status   ParticipantStatus @default(ACTIVE)
   /// Last time this participant opened the chat (unread counters)
   lastReadAt DateTime?
 
   @@unique([chatId, userId])
+  @@index([userId, status])
   @@map("chat_participants")
 }
 
+/// ERD #29 Message. BR-012: messages belong to a chat and are sent by
+/// authenticated users.
 model Message {
-  id       Int      @id @default(autoincrement())
-  chatId   Int
-  chat     Chat     @relation(fields: [chatId], references: [id], onDelete: Cascade)
-  senderId Int
-  sender   User     @relation("SentMessages", fields: [senderId], references: [id])
-  text     String
-  /// Attachment via uploads module
-  fileId   Int?
-  file     FileObject? @relation(fields: [fileId], references: [id])
-  sentAt   DateTime @default(now())
-  editedAt DateTime?
-  deletedAt DateTime?
+  id          Int           @id @default(autoincrement())
+  chatId      Int
+  chat        Chat          @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  senderId    Int
+  sender      User          @relation("SentMessages", fields: [senderId], references: [id])
+  messageText String
+  sentAt      DateTime      @default(now())
+  readAt      DateTime?
+  status      MessageStatus @default(SENT)
+  /// Attachment via uploads module (TR-004 document exchange).
+  fileId      Int?
+  file        FileObject?   @relation(fields: [fileId], references: [id])
+  editedAt    DateTime?
 
   @@index([chatId, sentAt])
   @@map("messages")
 }
 
-/// In-app notification feed (bell icon). Push delivery happens via
+/// ERD #25 Notification — the in-app feed (bell icon). BR-010: a notification
+/// MAY originate from an alert, but need not. Push delivery happens via
 /// DeviceToken + FCM; this row is the persistent record.
 model Notification {
-  id        Int              @id @default(autoincrement())
+  id        Int                @id @default(autoincrement())
   userId    Int
-  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  alertId   Int?
+  alert     Alert?             @relation(fields: [alertId], references: [id])
   type      NotificationType
   title     String
-  body      String
+  message   String
+  createdAt DateTime           @default(now())
+  readAt    DateTime?
+  status    NotificationStatus @default(UNREAD)
   /// Deep-link payload (JSON string): {"screen": "...", "id": 123}
   data      String?
-  alertId   Int?
-  alert     Alert?           @relation(fields: [alertId], references: [id])
-  readAt    DateTime?
-  createdAt DateTime         @default(now())
 
-  @@index([userId, readAt])
+  @@index([userId, status])
+  @@index([userId, createdAt])
   @@map("notifications")
 }
 
@@ -871,7 +1239,7 @@ model DeviceToken {
 // ---------------------------------------------------------------------------
 
 /// Files uploaded to storage (pluggable driver: local disk / R2).
-/// The DB row is the source of truth; `key` locates the physical object.
+/// The DB row is the source of truth; `key` is the ERD "FilePath".
 model FileObject {
   id        Int         @id @default(autoincrement())
   ownerId   Int
@@ -894,28 +1262,33 @@ model FileObject {
   @@map("file_objects")
 }
 
-/// Patient-visible document library (reports, discharge summaries, insurance
-/// papers). Wraps a FileObject with medical metadata.
+/// ERD #12 MedicalDocument — the patient-visible document library (reports,
+/// discharge summaries, insurance papers). FR-012: uploader and upload date
+/// are recorded.
 model MedicalDocument {
   id           Int            @id @default(autoincrement())
   patientId    Int
   patient      PatientProfile @relation(fields: [patientId], references: [id], onDelete: Cascade)
   uploadedById Int
   uploadedBy   User           @relation("DocumentUploader", fields: [uploadedById], references: [id])
+  type         DocumentType   @default(OTHER)
+  name         String
   fileId       Int
   file         FileObject     @relation(fields: [fileId], references: [id])
-  /// e.g. "report", "discharge_summary", "insurance", "referral"
-  type         String
-  name         String
+  uploadDate   DateTime       @default(now())
   description  String?
-  uploadedAt   DateTime       @default(now())
+  status       DocumentStatus @default(ACTIVE)
 
   @@index([patientId, type])
+  @@index([patientId, status])
   @@map("medical_documents")
 }
 
-/// Who did what, when, from where — required for medical-data compliance.
+/// ERD #31 AuditLog — who did what, when, from where (BR-013, SEC-004).
 /// Written by an interceptor on every mutating request.
+///
+/// Deviation: `userId` is nullable so pre-authentication events (a failed
+/// login, an anonymous request) are still recorded rather than dropped.
 model AuditLog {
   id          Int      @id @default(autoincrement())
   userId      Int?
@@ -924,9 +1297,9 @@ model AuditLog {
   action      String
   entityName  String
   entityId    String?
+  createdAt   DateTime @default(now())
   ipAddress   String?
   description String?
-  createdAt   DateTime @default(now())
 
   @@index([entityName, entityId])
   @@index([userId, createdAt])
