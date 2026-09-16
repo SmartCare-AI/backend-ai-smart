@@ -39,7 +39,7 @@ export class AppointmentsController {
   @ApiOperation({
     summary: 'Book an appointment',
     description:
-      'Patients book for themselves; caregivers need MANAGE_APPOINTMENTS permission for the patient. Rejects slots overlapping an existing pending/confirmed appointment of the doctor.',
+      'Patients book for themselves; caregivers need MANAGE_APPOINTMENTS permission for the patient. Rejects slots overlapping an existing pending/confirmed appointment of the doctor. VIDEO/CHAT bookings automatically get an Online Visit with a meeting link.',
   })
   @ApiResponse({ status: 201, type: AppointmentEntity })
   @ApiResponse({ status: 403, description: 'No permission to book for this patient.' })
@@ -67,12 +67,29 @@ export class AppointmentsController {
   @ApiOperation({
     summary: "A doctor's busy slots on a day (to render free slots)",
   })
-  @ApiResponse({ status: 200, description: '{ doctorId, date, busy: [{scheduledAt, endsAt}] }' })
+  @ApiResponse({
+    status: 200,
+    description: '{ doctorId, date, busy: [{startTime, endTime}] }',
+  })
   doctorSchedule(
     @Param('doctorId', ParseIntPipe) doctorId: number,
     @Query() query: DoctorScheduleDto,
   ) {
     return this.appointmentsService.doctorSchedule(doctorId, query.date);
+  }
+
+  @Get(':id')
+  @ApiOperation({
+    summary: 'Appointment details (participants, visit, online visit)',
+    description:
+      'Access: the patient, the treating doctor, or a caregiver with VIEW_RECORDS.',
+  })
+  @ApiResponse({ status: 200, type: AppointmentEntity })
+  findOne(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return this.appointmentsService.findOne(user, id);
   }
 
   @Patch(':id/confirm')

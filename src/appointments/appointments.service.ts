@@ -7,14 +7,18 @@ import {
 } from '@nestjs/common';
 import {
   AppointmentStatus,
+  AppointmentType,
   ConsentType,
   NotificationType,
+  Prisma,
+  ProfileStatus,
   Role,
 } from '@prisma/client';
 import type { AuthenticatedUser } from '../common/decorators/current-user.decorator';
 import { ConsentService } from '../consent/consent.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { TelemedicineService } from '../telemedicine/telemedicine.service';
 import { ProfilesService } from '../users/profiles.service';
 import {
   CreateAppointmentDto,
@@ -26,6 +30,12 @@ const BLOCKING_STATUSES: AppointmentStatus[] = [
   AppointmentStatus.CONFIRMED,
 ];
 
+/** Appointment types conducted remotely — they get an Online Visit (TR-001). */
+const REMOTE_TYPES: AppointmentType[] = [
+  AppointmentType.VIDEO,
+  AppointmentType.CHAT,
+];
+
 @Injectable()
 export class AppointmentsService {
   constructor(
@@ -33,6 +43,7 @@ export class AppointmentsService {
     private readonly consent: ConsentService,
     private readonly profiles: ProfilesService,
     private readonly notifications: NotificationsService,
+    private readonly telemedicine: TelemedicineService,
   ) {}
 
   async create(requester: AuthenticatedUser, dto: CreateAppointmentDto) {
@@ -45,30 +56,30 @@ export class AppointmentsService {
 
     const doctor = await this.prisma.doctorProfile.findUnique({
       where: { id: dto.doctorId },
-      include: { user: { select: { id: true, firstName: true, lastName: true } } },
+      select: { id: true, userId: true, isVerified: true, status: true },
     });
-    if (!doctor || !doctor.isVerified) {
-      throw new NotFoundException('Doctor not found or not verified.');
+    if (!doctor || !doctor.isVerified || doctor.status !== ProfileStatus.ACTIVE) {
+      throw new NotFoundException('Doctor not found or not available.');
     }
 
-    const scheduledAt = new Date(dto.scheduledAt);
-    if (scheduledAt <= new Date()) {
+    const startTime = new Date(dto.startTime);
+    if (startTime <= new Date()) {
       throw new BadRequestException('Appointment must be in the future.');
     }
-    const endsAt = new Date(
-      scheduledAt.getTime() + (dto.durationMinutes ?? 30) * 60_000,
+    const endTime = new Date(
+      startTime.getTime() + (dto.durationMinutes ?? 30) * 60_000,
     );
 
     // No double-booking: any pending/confirmed appointment overlapping
-    // [scheduledAt, endsAt) for this doctor blocks the slot.
+    // [startTime, endTime) for this doctor blocks the slot.
     const clash = await this.prisma.appointment.findFirst({
       where: {
         doctorId: dto.doctorId,
         status: { in: BLOCKING_STATUSES },
-        scheduledAt: { lt: endsAt },
-        endsAt: { gt: scheduledAt },
+        startTime: { lt: endTime },
+        endTime: { gt: startTime },
       },
-      select: { id: true, scheduledAt: true },
+      select: { id: true },
     });
     if (clash) {
       throw new ConflictException(
@@ -76,22 +87,30 @@ export class AppointmentsService {
       );
     }
 
+    const type = dto.type ?? AppointmentType.IN_PERSON;
     const appointment = await this.prisma.appointment.create({
       data: {
         patientId: dto.patientId,
         doctorId: dto.doctorId,
         bookedById: requester.id,
-        scheduledAt,
-        endsAt,
-        type: dto.type,
+        date: this.calendarDay(startTime),
+        startTime,
+        endTime,
+        type,
         reason: dto.reason,
+        notes: dto.notes,
       },
     });
 
-    await this.notifications.notify(doctor.user.id, {
+    // BR-011: remote appointments always carry a telemedicine session.
+    if (REMOTE_TYPES.includes(type)) {
+      await this.telemedicine.ensureForAppointment(appointment.id);
+    }
+
+    await this.notifications.notify(doctor.userId, {
       type: NotificationType.APPOINTMENT,
       title: 'New appointment request',
-      body: `New ${appointment.type.toLowerCase().replace('_', '-')} appointment on ${scheduledAt.toISOString()}.`,
+      message: `New ${type.toLowerCase().replace('_', '-')} appointment on ${startTime.toISOString()}.`,
       data: { screen: 'appointments', id: String(appointment.id) },
     });
     return appointment;
@@ -99,23 +118,45 @@ export class AppointmentsService {
 
   /** Role-aware listing: patients see their own, doctors see their own. */
   async listMine(requester: AuthenticatedUser, query: ListAppointmentsDto) {
-    let where: Record<string, unknown>;
+    const where: Prisma.AppointmentWhereInput = {};
     if (requester.role === Role.DOCTOR) {
       const doctor = await this.profiles.getDoctorByUserId(requester.id);
-      where = { doctorId: doctor.id };
+      where.doctorId = doctor.id;
     } else {
       const patient = await this.profiles.getPatientByUserId(requester.id);
-      where = { patientId: patient.id };
+      where.patientId = patient.id;
     }
     if (query.status) where.status = query.status;
-    if (query.upcoming) where.scheduledAt = { gte: new Date() };
+    if (query.upcoming) where.startTime = { gte: new Date() };
 
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
     const [items, total] = await this.prisma.$transaction([
       this.prisma.appointment.findMany({
         where,
-        orderBy: { scheduledAt: 'asc' },
+        include: {
+          patient: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              medicalRecordNo: true,
+            },
+          },
+          doctor: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              specialization: true,
+            },
+          },
+          onlineVisit: {
+            select: { id: true, status: true, meetingLink: true, type: true },
+          },
+          visit: { select: { id: true, status: true } },
+        },
+        orderBy: { startTime: 'asc' },
         skip: (page - 1) * limit,
         take: limit,
       }),
@@ -126,16 +167,15 @@ export class AppointmentsService {
 
   /** Busy slots of a doctor on a given day — the app renders free slots. */
   async doctorSchedule(doctorId: number, date: string) {
-    const dayStart = new Date(`${date}T00:00:00.000Z`);
-    const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
+    const day = new Date(`${date}T00:00:00.000Z`);
     const busy = await this.prisma.appointment.findMany({
       where: {
         doctorId,
         status: { in: BLOCKING_STATUSES },
-        scheduledAt: { gte: dayStart, lt: dayEnd },
+        date: day,
       },
-      select: { scheduledAt: true, endsAt: true },
-      orderBy: { scheduledAt: 'asc' },
+      select: { startTime: true, endTime: true },
+      orderBy: { startTime: 'asc' },
     });
     return { doctorId, date, busy };
   }
@@ -147,17 +187,22 @@ export class AppointmentsService {
       throw new ForbiddenException('This appointment is not yours to confirm.');
     }
     if (appointment.status !== AppointmentStatus.PENDING) {
-      throw new BadRequestException(`Cannot confirm a ${appointment.status} appointment.`);
+      throw new BadRequestException(
+        `Cannot confirm a ${appointment.status} appointment.`,
+      );
     }
 
     const updated = await this.prisma.appointment.update({
       where: { id },
       data: { status: AppointmentStatus.CONFIRMED },
     });
+    if (REMOTE_TYPES.includes(updated.type)) {
+      await this.telemedicine.ensureForAppointment(updated.id);
+    }
     await this.notifyPatient(
       updated.patientId,
       'Appointment confirmed',
-      `Your appointment on ${updated.scheduledAt.toISOString()} was confirmed.`,
+      `Your appointment on ${updated.startTime.toISOString()} was confirmed.`,
       updated.id,
     );
     return updated;
@@ -169,7 +214,9 @@ export class AppointmentsService {
       appointment.status === AppointmentStatus.CANCELLED ||
       appointment.status === AppointmentStatus.COMPLETED
     ) {
-      throw new BadRequestException(`Appointment is already ${appointment.status}.`);
+      throw new BadRequestException(
+        `Appointment is already ${appointment.status}.`,
+      );
     }
 
     // Who may cancel: the treating doctor, or whoever may manage the
@@ -195,12 +242,18 @@ export class AppointmentsService {
       },
     });
 
+    // A cancelled appointment must not leave a joinable session behind.
+    await this.prisma.onlineVisit.updateMany({
+      where: { appointmentId: id, status: { not: 'COMPLETED' } },
+      data: { status: 'CANCELLED' },
+    });
+
     // Tell the other side.
     if (requester.role === Role.DOCTOR) {
       await this.notifyPatient(
         updated.patientId,
         'Appointment cancelled',
-        `Your appointment on ${updated.scheduledAt.toISOString()} was cancelled by the doctor.`,
+        `Your appointment on ${updated.startTime.toISOString()} was cancelled by the doctor.`,
         updated.id,
       );
     } else {
@@ -212,7 +265,7 @@ export class AppointmentsService {
         await this.notifications.notify(doctor.userId, {
           type: NotificationType.APPOINTMENT,
           title: 'Appointment cancelled',
-          body: `The appointment on ${updated.scheduledAt.toISOString()} was cancelled by the patient.`,
+          message: `The appointment on ${updated.startTime.toISOString()} was cancelled by the patient.`,
           data: { screen: 'appointments', id: String(updated.id) },
         });
       }
@@ -220,10 +273,57 @@ export class AppointmentsService {
     return updated;
   }
 
+  /** Full appointment record: participants, visit and telemedicine session. */
+  async findOne(requester: AuthenticatedUser, id: number) {
+    const appointment = await this.prisma.appointment.findUnique({
+      where: { id },
+      include: {
+        patient: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            medicalRecordNo: true,
+          },
+        },
+        doctor: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            specialization: true,
+          },
+        },
+        visit: true,
+        onlineVisit: true,
+      },
+    });
+    if (!appointment) throw new NotFoundException('Appointment not found.');
+    await this.consent.assertCanAccessPatient(
+      requester,
+      appointment.patientId,
+      ConsentType.VIEW_RECORDS,
+    );
+    return appointment;
+  }
+
   // -------------------------------------------------------------------------
 
+  /** ERD Appointment.Date — the UTC calendar day of the slot. */
+  private calendarDay(startTime: Date): Date {
+    return new Date(
+      Date.UTC(
+        startTime.getUTCFullYear(),
+        startTime.getUTCMonth(),
+        startTime.getUTCDate(),
+      ),
+    );
+  }
+
   private async getOrThrow(id: number) {
-    const appointment = await this.prisma.appointment.findUnique({ where: { id } });
+    const appointment = await this.prisma.appointment.findUnique({
+      where: { id },
+    });
     if (!appointment) throw new NotFoundException('Appointment not found.');
     return appointment;
   }
@@ -231,7 +331,7 @@ export class AppointmentsService {
   private async notifyPatient(
     patientProfileId: number,
     title: string,
-    body: string,
+    message: string,
     appointmentId: number,
   ) {
     const patient = await this.prisma.patientProfile.findUnique({
@@ -242,7 +342,7 @@ export class AppointmentsService {
     await this.notifications.notify(patient.userId, {
       type: NotificationType.APPOINTMENT,
       title,
-      body,
+      message,
       data: { screen: 'appointments', id: String(appointmentId) },
     });
   }
