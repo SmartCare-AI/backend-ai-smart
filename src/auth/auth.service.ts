@@ -276,8 +276,10 @@ export class AuthService {
     });
 
     // Name parts from the social profile — only used when we have to create
-    // the patient profile ourselves.
-    const [socialFirstName = 'Shifaa', ...rest] = (decoded.name ?? '')
+    // the patient profile ourselves. `decoded.name` is loosely typed by
+    // firebase-admin, so narrow it before touching it.
+    const socialName = typeof decoded.name === 'string' ? decoded.name : '';
+    const [socialFirstName = 'Shifaa', ...rest] = socialName
       .trim()
       .split(/\s+/)
       .filter(Boolean);
