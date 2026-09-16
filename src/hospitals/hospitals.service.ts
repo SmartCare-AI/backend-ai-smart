@@ -3,10 +3,12 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { EntityStatus, ProfileStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   CreateDepartmentDto,
   CreateHospitalDto,
+  UpdateDepartmentDto,
   UpdateHospitalDto,
 } from './dto/hospital.dtos';
 
@@ -20,8 +22,8 @@ export class HospitalsService {
 
   findAll() {
     return this.prisma.hospital.findMany({
-      where: { isActive: true },
-      include: { departments: { where: { isActive: true } } },
+      where: { status: EntityStatus.ACTIVE },
+      include: { departments: { where: { status: EntityStatus.ACTIVE } } },
       orderBy: { name: 'asc' },
     });
   }
@@ -29,9 +31,7 @@ export class HospitalsService {
   async findOne(id: number) {
     const hospital = await this.prisma.hospital.findUnique({
       where: { id },
-      include: {
-        departments: { where: { isActive: true } },
-      },
+      include: { departments: { where: { status: EntityStatus.ACTIVE } } },
     });
     if (!hospital) throw new NotFoundException('Hospital not found.');
     return hospital;
@@ -47,7 +47,7 @@ export class HospitalsService {
     await this.findOne(id);
     return this.prisma.hospital.update({
       where: { id },
-      data: { isActive: false },
+      data: { status: EntityStatus.INACTIVE },
     });
   }
 
@@ -57,26 +57,60 @@ export class HospitalsService {
       where: { hospitalId_name: { hospitalId, name: dto.name } },
     });
     if (existing) {
-      throw new ConflictException('A department with this name already exists in this hospital.');
+      throw new ConflictException(
+        'A department with this name already exists in this hospital.',
+      );
     }
     return this.prisma.department.create({ data: { hospitalId, ...dto } });
+  }
+
+  async updateDepartment(departmentId: number, dto: UpdateDepartmentDto) {
+    const department = await this.prisma.department.findUnique({
+      where: { id: departmentId },
+    });
+    if (!department) throw new NotFoundException('Department not found.');
+    if (dto.name && dto.name !== department.name) {
+      const clash = await this.prisma.department.findUnique({
+        where: {
+          hospitalId_name: {
+            hospitalId: department.hospitalId,
+            name: dto.name,
+          },
+        },
+        select: { id: true },
+      });
+      if (clash) {
+        throw new ConflictException(
+          'A department with this name already exists in this hospital.',
+        );
+      }
+    }
+    return this.prisma.department.update({
+      where: { id: departmentId },
+      data: dto,
+    });
   }
 
   /** Doctors of a hospital — what patients browse before booking. */
   async listDoctors(hospitalId: number) {
     await this.findOne(hospitalId);
     return this.prisma.doctorProfile.findMany({
-      where: { hospitalId, isVerified: true },
+      where: {
+        hospitalId,
+        isVerified: true,
+        status: ProfileStatus.ACTIVE,
+      },
       select: {
         id: true,
+        firstName: true,
+        lastName: true,
         specialization: true,
         yearsOfExperience: true,
         bio: true,
         departmentId: true,
-        user: {
-          select: { firstName: true, lastName: true, avatarUrl: true },
-        },
+        user: { select: { id: true, avatarUrl: true } },
       },
+      orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
     });
   }
 }

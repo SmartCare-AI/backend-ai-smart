@@ -1,6 +1,8 @@
 import { ApiProperty, ApiPropertyOptional, PartialType } from '@nestjs/swagger';
+import { EntityStatus, HospitalType } from '@prisma/client';
 import {
   IsEmail,
+  IsEnum,
   IsNotEmpty,
   IsOptional,
   IsString,
@@ -8,23 +10,22 @@ import {
 } from 'class-validator';
 
 export class CreateHospitalDto {
-  @ApiProperty({ example: 'SmartCare Hospital' })
+  @ApiProperty({ example: 'SHIFAA Hospital' })
   @IsString()
   @IsNotEmpty()
   @MaxLength(150)
   name!: string;
 
-  @ApiPropertyOptional({ example: 'general', description: 'general | specialized | clinic' })
+  @ApiPropertyOptional({ enum: HospitalType, default: HospitalType.GENERAL })
   @IsOptional()
-  @IsString()
-  @MaxLength(50)
-  type?: string;
+  @IsEnum(HospitalType)
+  type?: HospitalType;
 
-  @ApiPropertyOptional({ example: 'Cairo, Egypt' })
-  @IsOptional()
+  @ApiProperty({ example: 'Cairo, Egypt' })
   @IsString()
+  @IsNotEmpty()
   @MaxLength(255)
-  address?: string;
+  address!: string;
 
   @ApiPropertyOptional({ example: '+20223456789' })
   @IsOptional()
@@ -32,10 +33,15 @@ export class CreateHospitalDto {
   @MaxLength(30)
   phone?: string;
 
-  @ApiPropertyOptional({ example: 'info@smartcare.dev' })
+  @ApiPropertyOptional({ example: 'info@shifaa.dev' })
   @IsOptional()
   @IsEmail()
   email?: string;
+
+  @ApiPropertyOptional({ enum: EntityStatus, default: EntityStatus.ACTIVE })
+  @IsOptional()
+  @IsEnum(EntityStatus)
+  status?: EntityStatus;
 }
 
 export class UpdateHospitalDto extends PartialType(CreateHospitalDto) {}
@@ -52,4 +58,11 @@ export class CreateDepartmentDto {
   @IsString()
   @MaxLength(500)
   description?: string;
+}
+
+export class UpdateDepartmentDto extends PartialType(CreateDepartmentDto) {
+  @ApiPropertyOptional({ enum: EntityStatus })
+  @IsOptional()
+  @IsEnum(EntityStatus)
+  status?: EntityStatus;
 }
