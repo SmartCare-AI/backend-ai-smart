@@ -6,10 +6,15 @@ import {
 } from '@nestjs/common';
 import {
   AppointmentStatus,
+  AppointmentType,
   AssessmentType,
   ConsentType,
+  ImageStatus,
+  Prisma,
   Role,
+  TestStatus,
   VisitStatus,
+  VisitType,
 } from '@prisma/client';
 import type { AuthenticatedUser } from '../common/decorators/current-user.decorator';
 import { ConsentService } from '../consent/consent.service';
@@ -23,7 +28,15 @@ import {
   CreateMedicalTestDto,
   CreateTestResultDto,
   CreateVisitDto,
+  UpdateDiagnosisStatusDto,
 } from './dto/visit.dtos';
+
+/** How an appointment type maps onto the encounter classification. */
+const VISIT_TYPE_BY_APPOINTMENT: Record<AppointmentType, VisitType> = {
+  [AppointmentType.IN_PERSON]: VisitType.IN_PERSON,
+  [AppointmentType.VIDEO]: VisitType.ONLINE,
+  [AppointmentType.CHAT]: VisitType.ONLINE,
+};
 
 @Injectable()
 export class VisitsService {
@@ -37,79 +50,89 @@ export class VisitsService {
   // Visits
   // -------------------------------------------------------------------------
 
+  /**
+   * Opens the clinical encounter for an appointment and completes that
+   * appointment. BR-004 makes the appointment link mandatory, so patient and
+   * doctor context is read through it rather than stored twice.
+   */
   async create(requester: AuthenticatedUser, dto: CreateVisitDto) {
     const doctor = await this.profiles.getDoctorByUserId(requester.id);
 
-    if (dto.appointmentId) {
-      const appointment = await this.prisma.appointment.findUnique({
-        where: { id: dto.appointmentId },
-      });
-      if (!appointment) throw new NotFoundException('Appointment not found.');
-      if (appointment.doctorId !== doctor.id) {
-        throw new ForbiddenException('This appointment belongs to another doctor.');
-      }
-      if (appointment.status === AppointmentStatus.CANCELLED) {
-        throw new BadRequestException('Cannot start a visit from a cancelled appointment.');
-      }
-      const existing = await this.prisma.visit.findUnique({
-        where: { appointmentId: appointment.id },
-      });
-      if (existing) {
-        throw new BadRequestException('A visit already exists for this appointment.');
-      }
-
-      const [visit] = await this.prisma.$transaction([
-        this.prisma.visit.create({
-          data: {
-            appointmentId: appointment.id,
-            patientId: appointment.patientId,
-            doctorId: doctor.id,
-            type: dto.type ?? appointment.type,
-            mainComplaint: dto.mainComplaint ?? appointment.reason,
-            notes: dto.notes,
-          },
-        }),
-        this.prisma.appointment.update({
-          where: { id: appointment.id },
-          data: { status: AppointmentStatus.COMPLETED },
-        }),
-      ]);
-      return visit;
+    const appointment = await this.prisma.appointment.findUnique({
+      where: { id: dto.appointmentId },
+      include: { visit: { select: { id: true } } },
+    });
+    if (!appointment) throw new NotFoundException('Appointment not found.');
+    if (appointment.doctorId !== doctor.id) {
+      throw new ForbiddenException(
+        'This appointment belongs to another doctor.',
+      );
+    }
+    if (appointment.status === AppointmentStatus.CANCELLED) {
+      throw new BadRequestException(
+        'Cannot start a visit from a cancelled appointment.',
+      );
+    }
+    if (appointment.visit) {
+      throw new BadRequestException(
+        'A visit already exists for this appointment.',
+      );
     }
 
-    // Walk-in / emergency visit.
-    if (!dto.patientId) {
-      throw new BadRequestException('patientId is required for walk-in visits.');
-    }
-    const patient = await this.prisma.patientProfile.findUnique({
-      where: { id: dto.patientId },
-      select: { id: true },
-    });
-    if (!patient) throw new NotFoundException('Patient not found.');
-
-    return this.prisma.visit.create({
-      data: {
-        patientId: patient.id,
-        doctorId: doctor.id,
-        type: dto.type,
-        mainComplaint: dto.mainComplaint,
-        notes: dto.notes,
-      },
-    });
+    const [visit] = await this.prisma.$transaction([
+      this.prisma.visit.create({
+        data: {
+          appointmentId: appointment.id,
+          type: dto.type ?? VISIT_TYPE_BY_APPOINTMENT[appointment.type],
+          mainComplaint: dto.mainComplaint ?? appointment.reason,
+          notes: dto.notes,
+        },
+      }),
+      this.prisma.appointment.update({
+        where: { id: appointment.id },
+        data: { status: AppointmentStatus.COMPLETED },
+      }),
+    ]);
+    return visit;
   }
 
   async listMine(requester: AuthenticatedUser, page: number, limit: number) {
-    let where: Record<string, unknown>;
+    let where: Prisma.VisitWhereInput;
     if (requester.role === Role.DOCTOR) {
       const doctor = await this.profiles.getDoctorByUserId(requester.id);
-      where = { doctorId: doctor.id };
+      where = { appointment: { doctorId: doctor.id } };
     } else {
       const patient = await this.profiles.getPatientByUserId(requester.id);
-      where = { patientId: patient.id };
+      where = { appointment: { patientId: patient.id } };
     }
     const [items, total] = await this.prisma.$transaction([
       this.prisma.visit.findMany({
         where,
+        include: {
+          appointment: {
+            select: {
+              id: true,
+              type: true,
+              startTime: true,
+              patient: {
+                select: {
+                  id: true,
+                  firstName: true,
+                  lastName: true,
+                  medicalRecordNo: true,
+                },
+              },
+              doctor: {
+                select: {
+                  id: true,
+                  firstName: true,
+                  lastName: true,
+                  specialization: true,
+                },
+              },
+            },
+          },
+        },
         orderBy: { date: 'desc' },
         skip: (page - 1) * limit,
         take: limit,
@@ -124,24 +147,41 @@ export class VisitsService {
     const visit = await this.prisma.visit.findUnique({
       where: { id },
       include: {
-        assessments: true,
-        diagnoses: true,
-        medicalTests: { include: { result: { include: { file: true } } } },
-        medicalImages: { include: { file: true } },
-        treatmentPlans: true,
-        doctor: {
+        appointment: {
           select: {
             id: true,
-            specialization: true,
-            user: { select: { firstName: true, lastName: true } },
+            type: true,
+            startTime: true,
+            patientId: true,
+            patient: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                medicalRecordNo: true,
+              },
+            },
+            doctor: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                specialization: true,
+              },
+            },
+            onlineVisit: true,
           },
         },
+        assessments: { orderBy: { date: 'desc' } },
+        diagnoses: { include: { treatmentPlans: true } },
+        medicalTests: { include: { result: { include: { file: true } } } },
+        medicalImages: { include: { file: true } },
       },
     });
     if (!visit) throw new NotFoundException('Visit not found.');
     await this.consent.assertCanAccessPatient(
       requester,
-      visit.patientId,
+      visit.appointment.patientId,
       ConsentType.VIEW_RECORDS,
     );
     return visit;
@@ -167,48 +207,89 @@ export class VisitsService {
   // Nested clinical records (treating doctor only, on an open visit)
   // -------------------------------------------------------------------------
 
-  async addDiagnosis(requester: AuthenticatedUser, visitId: number, dto: CreateDiagnosisDto) {
+  async addDiagnosis(
+    requester: AuthenticatedUser,
+    visitId: number,
+    dto: CreateDiagnosisDto,
+  ) {
     const visit = await this.getOwnedVisit(requester, visitId, true);
     return this.prisma.diagnosis.create({ data: { visitId: visit.id, ...dto } });
   }
 
-  async addTest(requester: AuthenticatedUser, visitId: number, dto: CreateMedicalTestDto) {
-    const visit = await this.getOwnedVisit(requester, visitId, true);
-    const doctor = await this.profiles.getDoctorByUserId(requester.id);
-    return this.prisma.medicalTest.create({
-      data: { visitId: visit.id, requestedById: doctor.id, ...dto },
+  async updateDiagnosisStatus(
+    requester: AuthenticatedUser,
+    diagnosisId: number,
+    dto: UpdateDiagnosisStatusDto,
+  ) {
+    const diagnosis = await this.prisma.diagnosis.findUnique({
+      where: { id: diagnosisId },
+      select: { id: true, visitId: true },
+    });
+    if (!diagnosis) throw new NotFoundException('Diagnosis not found.');
+    await this.getOwnedVisit(requester, diagnosis.visitId);
+    return this.prisma.diagnosis.update({
+      where: { id: diagnosisId },
+      data: { status: dto.status },
     });
   }
 
-  async addTestResult(requester: AuthenticatedUser, testId: number, dto: CreateTestResultDto) {
+  async addTest(
+    requester: AuthenticatedUser,
+    visitId: number,
+    dto: CreateMedicalTestDto,
+  ) {
+    const visit = await this.getOwnedVisit(requester, visitId, true);
+    return this.prisma.medicalTest.create({
+      data: { visitId: visit.id, doctorId: visit.appointment.doctorId, ...dto },
+    });
+  }
+
+  async addTestResult(
+    requester: AuthenticatedUser,
+    testId: number,
+    dto: CreateTestResultDto,
+  ) {
     const test = await this.prisma.medicalTest.findUnique({
       where: { id: testId },
-      include: { visit: { select: { doctorId: true } }, result: true },
+      include: {
+        visit: { select: { appointment: { select: { doctorId: true } } } },
+        result: true,
+      },
     });
     if (!test) throw new NotFoundException('Test not found.');
     const doctor = await this.profiles.getDoctorByUserId(requester.id);
-    if (test.visit.doctorId !== doctor.id) {
+    if (test.visit.appointment.doctorId !== doctor.id) {
       throw new ForbiddenException('This test belongs to another doctor.');
     }
-    if (test.result) throw new BadRequestException('This test already has a result.');
+    if (test.result) {
+      throw new BadRequestException('This test already has a result.');
+    }
     if (dto.fileId) await this.assertFileExists(dto.fileId);
 
     const [result] = await this.prisma.$transaction([
       this.prisma.testResult.create({ data: { testId, ...dto } }),
       this.prisma.medicalTest.update({
         where: { id: testId },
-        data: { status: 'COMPLETED' },
+        data: { status: TestStatus.COMPLETED },
       }),
     ]);
     return result;
   }
 
-  async addImage(requester: AuthenticatedUser, visitId: number, dto: CreateMedicalImageDto) {
+  async addImage(
+    requester: AuthenticatedUser,
+    visitId: number,
+    dto: CreateMedicalImageDto,
+  ) {
     const visit = await this.getOwnedVisit(requester, visitId, true);
-    const doctor = await this.profiles.getDoctorByUserId(requester.id);
     await this.assertFileExists(dto.fileId);
     return this.prisma.medicalImage.create({
-      data: { visitId: visit.id, orderedById: doctor.id, ...dto },
+      data: {
+        visitId: visit.id,
+        doctorId: visit.appointment.doctorId,
+        status: dto.report ? ImageStatus.REVIEWED : ImageStatus.AVAILABLE,
+        ...dto,
+      },
     });
   }
 
@@ -216,7 +297,10 @@ export class VisitsService {
   // Assessments (patient self-report / doctor evaluation)
   // -------------------------------------------------------------------------
 
-  async createAssessment(requester: AuthenticatedUser, dto: CreateAssessmentDto) {
+  async createAssessment(
+    requester: AuthenticatedUser,
+    dto: CreateAssessmentDto,
+  ) {
     if (requester.role === Role.PATIENT) {
       // Patients only self-report; type is forced, visit attachment ignored.
       const patient = await this.profiles.getPatientByUserId(requester.id);
@@ -240,6 +324,20 @@ export class VisitsService {
       dto.patientId,
       ConsentType.VIEW_RECORDS,
     );
+    // A visit-attached assessment must belong to the same patient.
+    if (dto.visitId) {
+      const visit = await this.prisma.visit.findUnique({
+        where: { id: dto.visitId },
+        select: { appointment: { select: { patientId: true } } },
+      });
+      if (!visit) throw new NotFoundException('Visit not found.');
+      if (visit.appointment.patientId !== dto.patientId) {
+        throw new BadRequestException(
+          'visitId does not belong to this patient.',
+        );
+      }
+    }
+
     return this.prisma.assessment.create({
       data: {
         patientId: dto.patientId,
@@ -269,7 +367,7 @@ export class VisitsService {
     const [items, total] = await this.prisma.$transaction([
       this.prisma.assessment.findMany({
         where,
-        orderBy: { createdAt: 'desc' },
+        orderBy: { date: 'desc' },
         skip: (page - 1) * limit,
         take: limit,
       }),
@@ -286,14 +384,21 @@ export class VisitsService {
     visitId: number,
     mustBeOpen = false,
   ) {
-    const visit = await this.prisma.visit.findUnique({ where: { id: visitId } });
+    const visit = await this.prisma.visit.findUnique({
+      where: { id: visitId },
+      include: {
+        appointment: { select: { doctorId: true, patientId: true } },
+      },
+    });
     if (!visit) throw new NotFoundException('Visit not found.');
     const doctor = await this.profiles.getDoctorByUserId(requester.id);
-    if (visit.doctorId !== doctor.id) {
+    if (visit.appointment.doctorId !== doctor.id) {
       throw new ForbiddenException('This visit belongs to another doctor.');
     }
     if (mustBeOpen && visit.status !== VisitStatus.OPEN) {
-      throw new BadRequestException('This visit is closed — reopen is not supported.');
+      throw new BadRequestException(
+        'This visit is closed — reopen is not supported.',
+      );
     }
     return visit;
   }

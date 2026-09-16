@@ -26,27 +26,37 @@ export class RecordVitalDto {
   @IsNumber()
   value!: number;
 
-  @ApiProperty({ example: 'bpm', description: 'bpm | mg/dL | % | mmHg | °C | kg | hours | steps' })
+  @ApiProperty({
+    example: 'bpm',
+    description: 'bpm | mg/dL | % | mmHg | °C | kg | hours | steps',
+  })
   @IsString()
   @MaxLength(20)
   unit!: string;
 
   @ApiPropertyOptional({
-    example: '2026-08-22T14:05:00.000Z',
+    example: '2026-09-16T14:05:00.000Z',
     description: 'When measured (UTC). Defaults to now.',
   })
   @IsOptional()
   @IsDateString()
   measuredAt?: string;
 
-  @ApiPropertyOptional({ example: 1, description: 'Paired device id (device sync).' })
+  @ApiPropertyOptional({
+    example: 1,
+    description:
+      'Paired device id. When set, a DeviceReading (ERD #23) is stored as the raw source and this vital is linked to it.',
+  })
   @IsOptional()
   @IsInt()
   deviceId?: number;
 }
 
 export class RecordVitalsBatchDto {
-  @ApiProperty({ type: [RecordVitalDto], description: 'Up to 100 readings (smartwatch sync).' })
+  @ApiProperty({
+    type: [RecordVitalDto],
+    description: 'Up to 100 readings (smartwatch sync).',
+  })
   @IsArray()
   @ArrayMinSize(1)
   @ArrayMaxSize(100)
@@ -61,17 +71,21 @@ export class VitalsSeriesQueryDto {
   @IsEnum(VitalType)
   type?: VitalType;
 
-  @ApiPropertyOptional({ example: '2026-08-01T00:00:00.000Z' })
+  @ApiPropertyOptional({ example: '2026-09-01T00:00:00.000Z' })
   @IsOptional()
   @IsDateString()
   from?: string;
 
-  @ApiPropertyOptional({ example: '2026-08-22T23:59:59.000Z' })
+  @ApiPropertyOptional({ example: '2026-09-16T23:59:59.000Z' })
   @IsOptional()
   @IsDateString()
   to?: string;
 
-  @ApiPropertyOptional({ default: 500, maximum: 2000, description: 'Max points returned.' })
+  @ApiPropertyOptional({
+    default: 500,
+    maximum: 2000,
+    description: 'Max points returned.',
+  })
   @IsOptional()
   @IsInt()
   @Min(1)

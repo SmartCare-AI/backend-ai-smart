@@ -28,6 +28,7 @@ import {
   CreateMedicalTestDto,
   CreateTestResultDto,
   CreateVisitDto,
+  UpdateDiagnosisStatusDto,
 } from './dto/visit.dtos';
 import { VisitsService } from './visits.service';
 
@@ -40,11 +41,15 @@ export class VisitsController {
   @Post()
   @Roles(Role.DOCTOR)
   @ApiOperation({
-    summary: 'Start a visit (from an appointment, or walk-in)',
+    summary: 'Start a visit from an appointment',
     description:
-      'With appointmentId: creates the encounter and marks the appointment COMPLETED. Without: walk-in visit, patientId required.',
+      'Creates the encounter and marks the appointment COMPLETED. BR-004: a visit always belongs to an appointment — for a walk-in, book an immediate slot first.',
   })
   @ApiResponse({ status: 201, description: 'The created visit.' })
+  @ApiResponse({
+    status: 400,
+    description: 'Appointment is cancelled or already has a visit.',
+  })
   create(@CurrentUser() user: AuthenticatedUser, @Body() dto: CreateVisitDto) {
     return this.visitsService.create(user, dto);
   }
@@ -61,7 +66,8 @@ export class VisitsController {
   @Get(':id')
   @ApiOperation({
     summary: 'Full visit record (assessments, diagnoses, tests, images, plans)',
-    description: 'Access: the patient, the treating doctor, or a caregiver with VIEW_RECORDS.',
+    description:
+      'Access: the patient, the treating doctor, or a caregiver with VIEW_RECORDS.',
   })
   @ApiResponse({ status: 403, description: 'No consent to view this record.' })
   findOne(
@@ -109,7 +115,8 @@ export class VisitsController {
   @Roles(Role.DOCTOR)
   @ApiOperation({
     summary: 'Attach a radiology image to an open visit',
-    description: 'Upload the file first via POST /uploads (purpose RADIOLOGY), then pass its fileId.',
+    description:
+      'Upload the file first via POST /uploads (purpose RADIOLOGY), then pass its fileId.',
   })
   addImage(
     @CurrentUser() user: AuthenticatedUser,
@@ -117,6 +124,28 @@ export class VisitsController {
     @Body() dto: CreateMedicalImageDto,
   ) {
     return this.visitsService.addImage(user, id, dto);
+  }
+}
+
+@ApiTags('Visits')
+@ApiBearerAuth('access-token')
+@Controller('diagnoses')
+export class DiagnosesController {
+  constructor(private readonly visitsService: VisitsService) {}
+
+  @Patch(':id/status')
+  @Roles(Role.DOCTOR)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Update a diagnosis status (ERD Diagnosis.Status)',
+    description: 'ACTIVE → RESOLVED / CHRONIC / RULED_OUT. Treating doctor only.',
+  })
+  updateStatus(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateDiagnosisStatusDto,
+  ) {
+    return this.visitsService.updateDiagnosisStatus(user, id, dto);
   }
 }
 
@@ -130,7 +159,8 @@ export class TestsController {
   @Roles(Role.DOCTOR)
   @ApiOperation({
     summary: 'Record the result of a requested test',
-    description: 'Marks the test COMPLETED. Optional fileId attaches the lab report.',
+    description:
+      'Marks the test COMPLETED. Optional fileId attaches the lab report.',
   })
   @ApiResponse({ status: 400, description: 'Test already has a result.' })
   addResult(

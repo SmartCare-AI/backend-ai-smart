@@ -1,42 +1,40 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
-  AppointmentType,
   AssessmentType,
+  DiagnosisStatus,
+  ImagingType,
   RiskLevel,
   Severity,
+  TestType,
+  VisitType,
 } from '@prisma/client';
+import { Transform } from 'class-transformer';
 import {
+  IsBoolean,
   IsEnum,
   IsInt,
   IsNotEmpty,
   IsOptional,
   IsString,
   MaxLength,
-  ValidateIf,
 } from 'class-validator';
 
 export class CreateVisitDto {
-  @ApiPropertyOptional({
+  @ApiProperty({
     example: 1,
     description:
-      'Create the visit from this appointment (marks it COMPLETED). Omit for a walk-in visit.',
+      'Appointment this encounter realizes. BR-004: every visit belongs to an appointment — book one first (walk-ins are booked as an immediate slot).',
   })
-  @IsOptional()
   @IsInt()
-  appointmentId?: number;
+  appointmentId!: number;
 
   @ApiPropertyOptional({
-    example: 1,
-    description: 'Required for walk-in visits (no appointmentId).',
+    enum: VisitType,
+    description: 'Defaults from the appointment type.',
   })
-  @ValidateIf((o: CreateVisitDto) => !o.appointmentId)
-  @IsInt()
-  patientId?: number;
-
-  @ApiPropertyOptional({ enum: AppointmentType, default: AppointmentType.IN_PERSON })
   @IsOptional()
-  @IsEnum(AppointmentType)
-  type?: AppointmentType;
+  @IsEnum(VisitType)
+  type?: VisitType;
 
   @ApiPropertyOptional({ example: 'Recurring chest pain for two weeks' })
   @IsOptional()
@@ -63,6 +61,8 @@ export class CloseVisitDto {
     default: false,
   })
   @IsOptional()
+  @Transform(({ value }) => value === 'true' || value === true)
+  @IsBoolean()
   followUpRequired?: boolean;
 }
 
@@ -89,6 +89,20 @@ export class CreateDiagnosisDto {
   @IsOptional()
   @IsEnum(Severity)
   severity?: Severity;
+
+  @ApiPropertyOptional({
+    enum: DiagnosisStatus,
+    default: DiagnosisStatus.ACTIVE,
+  })
+  @IsOptional()
+  @IsEnum(DiagnosisStatus)
+  status?: DiagnosisStatus;
+}
+
+export class UpdateDiagnosisStatusDto {
+  @ApiProperty({ enum: DiagnosisStatus, example: DiagnosisStatus.RESOLVED })
+  @IsEnum(DiagnosisStatus)
+  status!: DiagnosisStatus;
 }
 
 export class CreateAssessmentDto {
@@ -101,7 +115,11 @@ export class CreateAssessmentDto {
   @IsInt()
   patientId?: number;
 
-  @ApiPropertyOptional({ example: 1, description: 'Attach to a visit (doctors).' })
+  @ApiPropertyOptional({
+    example: 1,
+    description:
+      'Attach to a visit (doctors). Omitted for the pre-visit AI assessment.',
+  })
   @IsOptional()
   @IsInt()
   visitId?: number;
@@ -154,11 +172,10 @@ export class CreateMedicalTestDto {
   @MaxLength(150)
   name!: string;
 
-  @ApiPropertyOptional({ example: 'blood' })
+  @ApiPropertyOptional({ enum: TestType, default: TestType.OTHER })
   @IsOptional()
-  @IsString()
-  @MaxLength(50)
-  type?: string;
+  @IsEnum(TestType)
+  type?: TestType;
 
   @ApiPropertyOptional({ example: 'Fasting sample preferred.' })
   @IsOptional()
@@ -186,7 +203,9 @@ export class CreateTestResultDto {
   @MaxLength(100)
   normalRange?: string;
 
-  @ApiPropertyOptional({ example: 'Above target — indicates poor glycemic control.' })
+  @ApiPropertyOptional({
+    example: 'Above target — indicates poor glycemic control.',
+  })
   @IsOptional()
   @IsString()
   @MaxLength(1000)
@@ -205,11 +224,9 @@ export class CreateTestResultDto {
 }
 
 export class CreateMedicalImageDto {
-  @ApiProperty({ example: 'XRAY', description: 'XRAY | CT | MRI | ULTRASOUND' })
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(30)
-  type!: string;
+  @ApiProperty({ enum: ImagingType, example: ImagingType.XRAY })
+  @IsEnum(ImagingType)
+  type!: ImagingType;
 
   @ApiPropertyOptional({ example: 'chest' })
   @IsOptional()
@@ -217,7 +234,10 @@ export class CreateMedicalImageDto {
   @MaxLength(50)
   bodyPart?: string;
 
-  @ApiProperty({ example: 5, description: 'File id from POST /uploads (purpose RADIOLOGY).' })
+  @ApiProperty({
+    example: 5,
+    description: 'File id from POST /uploads (purpose RADIOLOGY).',
+  })
   @IsInt()
   fileId!: number;
 
