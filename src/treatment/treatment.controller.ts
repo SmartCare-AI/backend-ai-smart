@@ -25,6 +25,8 @@ import { PaginationDto } from '../common/dto/pagination.dto';
 import {
   CreatePrescriptionDto,
   CreateTreatmentPlanDto,
+  SearchMedicinesDto,
+  SkipDoseDto,
   UpdatePlanStatusDto,
 } from './dto/treatment.dtos';
 import { TreatmentService } from './treatment.service';
@@ -39,7 +41,8 @@ export class TreatmentPlansController {
   @Roles(Role.DOCTOR)
   @ApiOperation({
     summary: 'Create a treatment plan',
-    description: 'Requires a treating relationship with the patient.',
+    description:
+      'Requires a treating relationship with the patient. BR-006: the diagnosis link is optional, but when given it must belong to the same patient.',
   })
   create(
     @CurrentUser() user: AuthenticatedUser,
@@ -51,7 +54,8 @@ export class TreatmentPlansController {
   @Get('patients/:patientId')
   @ApiOperation({
     summary: "A patient's treatment plans",
-    description: 'Access: the patient, treating doctor, or caregiver with VIEW_RECORDS.',
+    description:
+      'Access: the patient, treating doctor, or caregiver with VIEW_RECORDS.',
   })
   list(
     @CurrentUser() user: AuthenticatedUser,
@@ -88,11 +92,18 @@ export class PrescriptionsController {
   @Post()
   @Roles(Role.DOCTOR)
   @ApiOperation({
-    summary: 'Issue a prescription',
+    summary: 'Issue a prescription under a treatment plan',
     description:
-      'Creates the prescription + items, and GENERATES the full MedicationDose schedule (timesPerDay × durationDays rows per item) that powers reminders and adherence tracking. The patient is notified.',
+      'BR-007: the prescription hangs off a treatment plan, which supplies the patient and prescribing doctor. Creates the prescription + items and GENERATES the full MedicineTracking schedule (timesPerDay × durationDays rows per item) that powers reminders and adherence tracking. The patient is notified.',
   })
-  @ApiResponse({ status: 201, description: 'Prescription with items and medicines.' })
+  @ApiResponse({
+    status: 201,
+    description: 'Prescription with items and medicines.',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'The treatment plan is not ACTIVE.',
+  })
   create(
     @CurrentUser() user: AuthenticatedUser,
     @Body() dto: CreatePrescriptionDto,
@@ -127,6 +138,23 @@ export class PrescriptionsController {
 
 @ApiTags('Treatment')
 @ApiBearerAuth('access-token')
+@Controller('medicines')
+export class MedicinesController {
+  constructor(private readonly treatmentService: TreatmentService) {}
+
+  @Get()
+  @ApiOperation({
+    summary: 'Search the medicine catalog (ERD #19)',
+    description:
+      'Type-ahead source for the prescribing screen. Matches name or generic name.',
+  })
+  search(@Query() query: SearchMedicinesDto) {
+    return this.treatmentService.searchMedicines(query);
+  }
+}
+
+@ApiTags('Treatment')
+@ApiBearerAuth('access-token')
 @Controller('medications')
 export class MedicationsController {
   constructor(private readonly treatmentService: TreatmentService) {}
@@ -135,7 +163,8 @@ export class MedicationsController {
   @Roles(Role.PATIENT)
   @ApiOperation({
     summary: 'My upcoming medication doses',
-    description: 'Doses due within the window (default 24h), plus a 1-hour grace period backwards.',
+    description:
+      'Doses due within the window (default 24h), plus a 1-hour grace period backwards.',
   })
   @ApiQuery({ name: 'hours', required: false, example: 24 })
   upcoming(
@@ -156,6 +185,22 @@ export class MedicationsController {
     @Param('id', ParseIntPipe) id: number,
   ) {
     return this.treatmentService.takeDose(user, id);
+  }
+
+  @Patch('doses/:id/skip')
+  @Roles(Role.PATIENT)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Mark a dose as deliberately skipped',
+    description:
+      'Distinct from MISSED: a skip is recorded with a reason and does not count against the adherence score.',
+  })
+  skip(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: SkipDoseDto,
+  ) {
+    return this.treatmentService.skipDose(user, id, dto);
   }
 
   @Get('adherence/patients/:patientId')

@@ -1,8 +1,13 @@
+import { BadRequestException, Injectable } from '@nestjs/common';
 import {
-  BadRequestException,
-  Injectable,
-} from '@nestjs/common';
-import { ConsentType, RiskLevel, VitalSign, VitalSource } from '@prisma/client';
+  AlertType,
+  ConsentType,
+  DeviceStatus,
+  Prisma,
+  RiskLevel,
+  VitalSign,
+  VitalSource,
+} from '@prisma/client';
 import { AlertsService } from '../alerts/alerts.service';
 import type { AuthenticatedUser } from '../common/decorators/current-user.decorator';
 import { ConsentService } from '../consent/consent.service';
@@ -15,6 +20,14 @@ import {
 } from './dto/vital.dtos';
 import { evaluateVital } from './vital-thresholds';
 
+/**
+ * ERD #16 VitalSign — the patient's clinical measurement stream.
+ *
+ * A reading that comes from a paired device is written twice on purpose: the
+ * raw DeviceReading (#23, owned by the Device per BR-009) and the clinical
+ * VitalSign that points at it. Charts, thresholds and the AI modules read the
+ * single VitalSign series regardless of origin.
+ */
 @Injectable()
 export class VitalsService {
   constructor(
@@ -28,18 +41,9 @@ export class VitalsService {
     const patient = await this.profiles.getPatientByUserId(requester.id);
     await this.assertDeviceOwnership(patient.id, dto.deviceId);
 
-    const vital = await this.prisma.vitalSign.create({
-      data: {
-        patientId: patient.id,
-        type: dto.type,
-        value: dto.value,
-        unit: dto.unit,
-        source: dto.deviceId ? VitalSource.DEVICE : VitalSource.MANUAL,
-        deviceId: dto.deviceId ?? null,
-        measuredAt: dto.measuredAt ? new Date(dto.measuredAt) : new Date(),
-      },
-    });
-
+    const vital = await this.prisma.$transaction((tx) =>
+      this.persistReading(tx, patient.id, dto),
+    );
     await this.checkThreshold(vital);
     return vital;
   }
@@ -47,27 +51,26 @@ export class VitalsService {
   /** Device sync — one alert max per vital type per batch (worst reading). */
   async recordBatch(requester: AuthenticatedUser, dto: RecordVitalsBatchDto) {
     const patient = await this.profiles.getPatientByUserId(requester.id);
-    const deviceIds = [...new Set(dto.readings.map((r) => r.deviceId).filter(Boolean))];
+    const deviceIds = [
+      ...new Set(dto.readings.map((r) => r.deviceId).filter(Boolean)),
+    ] as number[];
     for (const deviceId of deviceIds) {
-      await this.assertDeviceOwnership(patient.id, deviceId as number);
+      await this.assertDeviceOwnership(patient.id, deviceId);
     }
 
-    const created: VitalSign[] = [];
-    for (const reading of dto.readings) {
-      created.push(
-        await this.prisma.vitalSign.create({
-          data: {
-            patientId: patient.id,
-            type: reading.type,
-            value: reading.value,
-            unit: reading.unit,
-            source: reading.deviceId ? VitalSource.DEVICE : VitalSource.MANUAL,
-            deviceId: reading.deviceId ?? null,
-            measuredAt: reading.measuredAt ? new Date(reading.measuredAt) : new Date(),
-          },
-        }),
-      );
-    }
+    const created = await this.prisma.$transaction(async (tx) => {
+      const rows: VitalSign[] = [];
+      for (const reading of dto.readings) {
+        rows.push(await this.persistReading(tx, patient.id, reading));
+      }
+      if (deviceIds.length > 0) {
+        await tx.device.updateMany({
+          where: { id: { in: deviceIds } },
+          data: { lastSync: new Date() },
+        });
+      }
+      return rows;
+    });
 
     // Evaluate only the worst violation per type — a 100-point sync must
     // not fire 100 alerts.
@@ -79,7 +82,11 @@ export class VitalsService {
       const currentSeverity = current
         ? evaluateVital(current.type, current.value)?.severity
         : undefined;
-      if (!current || (violation.severity === RiskLevel.CRITICAL && currentSeverity !== RiskLevel.CRITICAL)) {
+      if (
+        !current ||
+        (violation.severity === RiskLevel.CRITICAL &&
+          currentSeverity !== RiskLevel.CRITICAL)
+      ) {
         worstByType.set(vital.type, vital);
       }
     }
@@ -119,12 +126,52 @@ export class VitalsService {
         unit: true,
         source: true,
         measuredAt: true,
+        deviceReading: { select: { id: true, deviceId: true } },
       },
     });
     return { patientId, count: items.length, items };
   }
 
   // -------------------------------------------------------------------------
+
+  /**
+   * Writes one measurement. Device-sourced values also create the raw
+   * DeviceReading row the ERD requires, linked 1:1 to the vital sign.
+   */
+  private async persistReading(
+    tx: Prisma.TransactionClient,
+    patientId: number,
+    dto: RecordVitalDto,
+  ): Promise<VitalSign> {
+    const measuredAt = dto.measuredAt ? new Date(dto.measuredAt) : new Date();
+
+    const deviceReadingId = dto.deviceId
+      ? (
+          await tx.deviceReading.create({
+            data: {
+              deviceId: dto.deviceId,
+              type: dto.type,
+              value: dto.value,
+              unit: dto.unit,
+              measuredAt,
+            },
+            select: { id: true },
+          })
+        ).id
+      : null;
+
+    return tx.vitalSign.create({
+      data: {
+        patientId,
+        type: dto.type,
+        value: dto.value,
+        unit: dto.unit,
+        source: dto.deviceId ? VitalSource.DEVICE : VitalSource.MANUAL,
+        deviceReadingId,
+        measuredAt,
+      },
+    });
+  }
 
   private async checkThreshold(vital: VitalSign) {
     const violation = evaluateVital(vital.type, vital.value);
@@ -133,6 +180,7 @@ export class VitalsService {
     const typeLabel = vital.type.toLowerCase().replace(/_/g, ' ');
     await this.alerts.raise({
       patientId: vital.patientId,
+      type: AlertType.VITAL_ANOMALY,
       title: `Abnormal ${typeLabel}: ${vital.value} ${vital.unit}`,
       description: `Measured ${typeLabel} of ${vital.value} ${vital.unit} is ${violation.bound} the safe range.`,
       severity: violation.severity,
@@ -145,10 +193,16 @@ export class VitalsService {
     if (!deviceId) return;
     const device = await this.prisma.device.findUnique({
       where: { id: deviceId },
-      select: { patientId: true, isActive: true },
+      select: { patientId: true, status: true },
     });
-    if (!device || device.patientId !== patientId || !device.isActive) {
-      throw new BadRequestException('deviceId does not belong to you or is inactive.');
+    if (
+      !device ||
+      device.patientId !== patientId ||
+      device.status !== DeviceStatus.CONNECTED
+    ) {
+      throw new BadRequestException(
+        'deviceId does not belong to you or is not connected.',
+      );
     }
   }
 }

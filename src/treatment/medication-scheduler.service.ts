@@ -1,7 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import {
-  MedicationDoseStatus,
+  AlertType,
+  MedicineTrackingStatus,
   NotificationType,
   RiskLevel,
 } from '@prisma/client';
@@ -14,7 +15,8 @@ const MISSED_AFTER_MIN = 60; // dose counts as missed 60 min past schedule
 const CONSECUTIVE_MISSED_FOR_ALERT = 3;
 
 /**
- * The adherence engine (File.md Phase C). Every minute:
+ * The adherence engine (BRD FR-019/FR-020, AI module "Medication Adherence
+ * Analysis"). Every minute:
  *  1. Reminders  — push "time for your medication" for doses due soon.
  *  2. Missed     — doses >60 min overdue become MISSED; three consecutive
  *                  missed doses raise a HIGH alert to doctor + caregivers
@@ -53,11 +55,11 @@ export class MedicationSchedulerService {
 
   private async sendReminders() {
     const now = new Date();
-    const due = await this.prisma.medicationDose.findMany({
+    const due = await this.prisma.medicineTracking.findMany({
       where: {
-        status: MedicationDoseStatus.SCHEDULED,
+        status: MedicineTrackingStatus.SCHEDULED,
         reminderSentAt: null,
-        scheduledAt: {
+        scheduledTime: {
           // Don't resurrect ancient reminders after downtime; missed
           // detection owns anything older.
           gte: new Date(now.getTime() - REMINDER_WINDOW_MIN * 60_000),
@@ -89,32 +91,37 @@ export class MedicationSchedulerService {
       await this.notifications.notify(userId, {
         type: NotificationType.MEDICATION_REMINDER,
         title: 'Time for your medication 💊',
-        body: meds,
-        data: { screen: 'medications', doseIds: doses.map((d) => d.id).join(',') },
+        message: meds,
+        data: {
+          screen: 'medications',
+          doseIds: doses.map((d) => d.id).join(','),
+        },
       });
     }
 
-    await this.prisma.medicationDose.updateMany({
+    await this.prisma.medicineTracking.updateMany({
       where: { id: { in: due.map((d) => d.id) } },
       data: { reminderSentAt: now },
     });
-    this.logger.log(`Sent ${due.length} dose reminder(s) to ${byPatient.size} patient(s).`);
+    this.logger.log(
+      `Sent ${due.length} dose reminder(s) to ${byPatient.size} patient(s).`,
+    );
   }
 
   private async detectMissed() {
     const cutoff = new Date(Date.now() - MISSED_AFTER_MIN * 60_000);
-    const overdue = await this.prisma.medicationDose.findMany({
+    const overdue = await this.prisma.medicineTracking.findMany({
       where: {
-        status: MedicationDoseStatus.SCHEDULED,
-        scheduledAt: { lt: cutoff },
+        status: MedicineTrackingStatus.SCHEDULED,
+        scheduledTime: { lt: cutoff },
       },
       select: { id: true, patientId: true },
     });
     if (overdue.length === 0) return;
 
-    await this.prisma.medicationDose.updateMany({
+    await this.prisma.medicineTracking.updateMany({
       where: { id: { in: overdue.map((d) => d.id) } },
-      data: { status: MedicationDoseStatus.MISSED },
+      data: { status: MedicineTrackingStatus.MISSED },
     });
     this.logger.log(`Marked ${overdue.length} dose(s) as MISSED.`);
 
@@ -122,22 +129,23 @@ export class MedicationSchedulerService {
     // all missed? (settled = anything no longer SCHEDULED)
     const patientIds = [...new Set(overdue.map((d) => d.patientId))];
     for (const patientId of patientIds) {
-      const recent = await this.prisma.medicationDose.findMany({
+      const recent = await this.prisma.medicineTracking.findMany({
         where: {
           patientId,
-          status: { not: MedicationDoseStatus.SCHEDULED },
+          status: { not: MedicineTrackingStatus.SCHEDULED },
         },
-        orderBy: { scheduledAt: 'desc' },
+        orderBy: { scheduledTime: 'desc' },
         take: CONSECUTIVE_MISSED_FOR_ALERT,
         select: { status: true },
       });
       const allMissed =
         recent.length === CONSECUTIVE_MISSED_FOR_ALERT &&
-        recent.every((d) => d.status === MedicationDoseStatus.MISSED);
+        recent.every((d) => d.status === MedicineTrackingStatus.MISSED);
       if (!allMissed) continue;
 
       await this.alerts.raise({
         patientId,
+        type: AlertType.MEDICATION_ADHERENCE,
         title: `${CONSECUTIVE_MISSED_FOR_ALERT} consecutive medication doses missed`,
         description:
           'The patient has stopped taking their medication. Early intervention recommended.',

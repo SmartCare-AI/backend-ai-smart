@@ -5,6 +5,7 @@ import { UsersModule } from '../users/users.module';
 import { MedicationSchedulerService } from './medication-scheduler.service';
 import {
   MedicationsController,
+  MedicinesController,
   PrescriptionsController,
   TreatmentPlansController,
 } from './treatment.controller';
@@ -15,6 +16,7 @@ import { TreatmentService } from './treatment.service';
   controllers: [
     TreatmentPlansController,
     PrescriptionsController,
+    MedicinesController,
     MedicationsController,
   ],
   providers: [TreatmentService, MedicationSchedulerService],

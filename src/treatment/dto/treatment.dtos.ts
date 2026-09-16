@@ -1,5 +1,9 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { TreatmentPlanStatus } from '@prisma/client';
+import {
+  AdministrationRoute,
+  MedicineForm,
+  TreatmentPlanStatus,
+} from '@prisma/client';
 import { Type } from 'class-transformer';
 import {
   ArrayMaxSize,
@@ -16,33 +20,29 @@ import {
   Min,
   ValidateNested,
 } from 'class-validator';
+import { PaginationDto } from '../../common/dto/pagination.dto';
 
 export class CreateTreatmentPlanDto {
   @ApiProperty({ example: 1, description: 'Patient profile id.' })
   @IsInt()
   patientId!: number;
 
-  @ApiPropertyOptional({ example: 1, description: 'Visit this plan came out of.' })
-  @IsOptional()
-  @IsInt()
-  visitId?: number;
-
-  @ApiPropertyOptional({ example: 1, description: 'Diagnosis being treated.' })
+  @ApiPropertyOptional({
+    example: 1,
+    description: 'Diagnosis being treated (BR-006: optional).',
+  })
   @IsOptional()
   @IsInt()
   diagnosisId?: number;
 
-  @ApiProperty({ example: 'Glycemic control program' })
+  @ApiProperty({
+    example: 'Glycemic control program: diet adjustment + metformin for 3 months.',
+    description: 'ERD TreatmentPlan.Description — the planned treatment.',
+  })
   @IsString()
   @IsNotEmpty()
-  @MaxLength(200)
-  title!: string;
-
-  @ApiPropertyOptional({ example: 'Diet adjustment + metformin for 3 months.' })
-  @IsOptional()
-  @IsString()
   @MaxLength(2000)
-  description?: string;
+  description!: string;
 
   @ApiPropertyOptional({ example: 'HbA1c below 6.5% within 3 months.' })
   @IsOptional()
@@ -50,7 +50,7 @@ export class CreateTreatmentPlanDto {
   @MaxLength(1000)
   goals?: string;
 
-  @ApiPropertyOptional({ example: '2026-11-22T00:00:00.000Z' })
+  @ApiPropertyOptional({ example: '2026-12-16T00:00:00.000Z' })
   @IsOptional()
   @IsDateString()
   endDate?: string;
@@ -63,7 +63,10 @@ export class CreateTreatmentPlanDto {
 }
 
 export class UpdatePlanStatusDto {
-  @ApiProperty({ enum: TreatmentPlanStatus, example: TreatmentPlanStatus.COMPLETED })
+  @ApiProperty({
+    enum: TreatmentPlanStatus,
+    example: TreatmentPlanStatus.COMPLETED,
+  })
   @IsEnum(TreatmentPlanStatus)
   status!: TreatmentPlanStatus;
 }
@@ -75,11 +78,16 @@ export class PrescriptionItemDto {
   @MaxLength(150)
   medicineName!: string;
 
-  @ApiPropertyOptional({ example: 'tablet' })
+  @ApiPropertyOptional({ example: 'Metformin hydrochloride' })
   @IsOptional()
   @IsString()
-  @MaxLength(50)
-  form?: string;
+  @MaxLength(150)
+  genericName?: string;
+
+  @ApiPropertyOptional({ enum: MedicineForm, example: MedicineForm.TABLET })
+  @IsOptional()
+  @IsEnum(MedicineForm)
+  form?: MedicineForm;
 
   @ApiPropertyOptional({ example: '500mg' })
   @IsOptional()
@@ -97,24 +105,32 @@ export class PrescriptionItemDto {
     example: 2,
     minimum: 1,
     maximum: 6,
-    description: 'Intakes per day — the dose schedule is generated from this.',
+    description:
+      'Intakes per day — the MedicineTracking schedule is generated from this.',
   })
   @IsInt()
   @Min(1)
   @Max(6)
   timesPerDay!: number;
 
-  @ApiProperty({ example: 7, minimum: 1, maximum: 180, description: 'Days of treatment.' })
+  @ApiProperty({
+    example: 7,
+    minimum: 1,
+    maximum: 180,
+    description: 'Days of treatment.',
+  })
   @IsInt()
   @Min(1)
   @Max(180)
   durationDays!: number;
 
-  @ApiPropertyOptional({ example: 'oral' })
+  @ApiPropertyOptional({
+    enum: AdministrationRoute,
+    example: AdministrationRoute.ORAL,
+  })
   @IsOptional()
-  @IsString()
-  @MaxLength(30)
-  route?: string;
+  @IsEnum(AdministrationRoute)
+  route?: AdministrationRoute;
 
   @ApiPropertyOptional({ example: 'Take with food.' })
   @IsOptional()
@@ -124,14 +140,13 @@ export class PrescriptionItemDto {
 }
 
 export class CreatePrescriptionDto {
-  @ApiProperty({ example: 1, description: 'Patient profile id.' })
+  @ApiProperty({
+    example: 1,
+    description:
+      'Treatment plan this prescription belongs to (BR-007 — mandatory). The patient and prescribing doctor are read from it.',
+  })
   @IsInt()
-  patientId!: number;
-
-  @ApiPropertyOptional({ example: 1 })
-  @IsOptional()
-  @IsInt()
-  treatmentPlanId?: number;
+  treatmentPlanId!: number;
 
   @ApiPropertyOptional({ example: 'Take all medication with meals.' })
   @IsOptional()
@@ -152,4 +167,28 @@ export class CreatePrescriptionDto {
   @ValidateNested({ each: true })
   @Type(() => PrescriptionItemDto)
   items!: PrescriptionItemDto[];
+}
+
+export class SkipDoseDto {
+  @ApiPropertyOptional({ example: 'Felt nauseous, skipped on doctor’s advice.' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  notes?: string;
+}
+
+export class SearchMedicinesDto extends PaginationDto {
+  @ApiPropertyOptional({
+    example: 'metfor',
+    description: 'Case-insensitive match on name or generic name.',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  q?: string;
+
+  @ApiPropertyOptional({ enum: MedicineForm })
+  @IsOptional()
+  @IsEnum(MedicineForm)
+  form?: MedicineForm;
 }

@@ -6,7 +6,8 @@ import {
 } from '@nestjs/common';
 import {
   ConsentType,
-  MedicationDoseStatus,
+  EntityStatus,
+  MedicineTrackingStatus,
   NotificationType,
   Prisma,
   TreatmentPlanStatus,
@@ -20,12 +21,14 @@ import {
   CreatePrescriptionDto,
   CreateTreatmentPlanDto,
   PrescriptionItemDto,
+  SearchMedicinesDto,
+  SkipDoseDto,
   UpdatePlanStatusDto,
 } from './dto/treatment.dtos';
 
 /**
  * Intake hours per frequency — spread over waking hours, expressed in UTC
- * for MVP (the mobile app localizes display; see File.md UTC rule).
+ * for MVP (the mobile app localizes display).
  */
 const SLOT_HOURS: Record<number, number[]> = {
   1: [9],
@@ -46,7 +49,7 @@ export class TreatmentService {
   ) {}
 
   // -------------------------------------------------------------------------
-  // Treatment plans
+  // Treatment plans (ERD #17)
   // -------------------------------------------------------------------------
 
   async createPlan(requester: AuthenticatedUser, dto: CreateTreatmentPlanDto) {
@@ -58,13 +61,25 @@ export class TreatmentService {
       ConsentType.VIEW_RECORDS,
     );
 
+    // BR-006: the optional diagnosis must belong to this patient's record.
+    if (dto.diagnosisId) {
+      const diagnosis = await this.prisma.diagnosis.findUnique({
+        where: { id: dto.diagnosisId },
+        select: { visit: { select: { appointment: { select: { patientId: true } } } } },
+      });
+      if (!diagnosis) throw new NotFoundException('Diagnosis not found.');
+      if (diagnosis.visit.appointment.patientId !== dto.patientId) {
+        throw new BadRequestException(
+          'diagnosisId does not belong to this patient.',
+        );
+      }
+    }
+
     return this.prisma.treatmentPlan.create({
       data: {
         patientId: dto.patientId,
         doctorId: doctor.id,
-        visitId: dto.visitId ?? null,
         diagnosisId: dto.diagnosisId ?? null,
-        title: dto.title,
         description: dto.description,
         goals: dto.goals,
         endDate: dto.endDate ? new Date(dto.endDate) : null,
@@ -88,7 +103,18 @@ export class TreatmentService {
     const [items, total] = await this.prisma.$transaction([
       this.prisma.treatmentPlan.findMany({
         where,
-        include: { prescriptions: { select: { id: true, status: true } } },
+        include: {
+          prescriptions: { select: { id: true, status: true, date: true } },
+          diagnosis: { select: { id: true, name: true, code: true } },
+          doctor: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              specialization: true,
+            },
+          },
+        },
         orderBy: { startDate: 'desc' },
         skip: (page - 1) * limit,
         take: limit,
@@ -122,35 +148,43 @@ export class TreatmentService {
   }
 
   // -------------------------------------------------------------------------
-  // Prescriptions (+ automatic dose schedule)
+  // Prescriptions (ERD #18) + automatic MedicineTracking schedule
   // -------------------------------------------------------------------------
 
+  /**
+   * BR-007: a prescription always belongs to a treatment plan, which supplies
+   * the patient and the prescribing doctor. Creating it also generates the
+   * full intake schedule (MedicineTracking, ERD #21) that drives reminders
+   * and adherence analytics.
+   */
   async createPrescription(
     requester: AuthenticatedUser,
     dto: CreatePrescriptionDto,
   ) {
     const doctor = await this.profiles.getDoctorByUserId(requester.id);
+    const plan = await this.prisma.treatmentPlan.findUnique({
+      where: { id: dto.treatmentPlanId },
+      select: { id: true, patientId: true, doctorId: true, status: true },
+    });
+    if (!plan) throw new NotFoundException('Treatment plan not found.');
+    if (plan.doctorId !== doctor.id) {
+      throw new ForbiddenException('This treatment plan belongs to another doctor.');
+    }
+    if (plan.status !== TreatmentPlanStatus.ACTIVE) {
+      throw new BadRequestException(
+        `Cannot prescribe on a ${plan.status} treatment plan.`,
+      );
+    }
     await this.consent.assertCanAccessPatient(
       requester,
-      dto.patientId,
+      plan.patientId,
       ConsentType.VIEW_RECORDS,
     );
-    if (dto.treatmentPlanId) {
-      const plan = await this.prisma.treatmentPlan.findUnique({
-        where: { id: dto.treatmentPlanId },
-        select: { patientId: true },
-      });
-      if (!plan || plan.patientId !== dto.patientId) {
-        throw new BadRequestException('treatmentPlanId does not belong to this patient.');
-      }
-    }
 
     const prescription = await this.prisma.$transaction(async (tx) => {
       const created = await tx.prescription.create({
         data: {
-          patientId: dto.patientId,
-          doctorId: doctor.id,
-          treatmentPlanId: dto.treatmentPlanId ?? null,
+          treatmentPlanId: plan.id,
           instructions: dto.instructions,
           notes: dto.notes,
         },
@@ -164,19 +198,19 @@ export class TreatmentService {
             medicineId: medicine.id,
             dose: item.dose,
             frequency: `${item.timesPerDay}x daily`,
-            route: item.route,
+            route: item.route ?? null,
             duration: `${item.durationDays} days`,
             instructions: item.instructions,
           },
         });
 
-        // The clever bit: one MedicationDose row per scheduled intake.
-        // These rows ARE the adherence data and drive Phase C reminders.
-        await tx.medicationDose.createMany({
-          data: this.generateSchedule(item).map((scheduledAt) => ({
+        // The clever bit: one MedicineTracking row per scheduled intake.
+        // These rows ARE the adherence data and drive the reminders.
+        await tx.medicineTracking.createMany({
+          data: this.generateSchedule(item).map((scheduledTime) => ({
             prescriptionItemId: prescriptionItem.id,
-            patientId: dto.patientId,
-            scheduledAt,
+            patientId: plan.patientId,
+            scheduledTime,
           })),
         });
       }
@@ -184,14 +218,14 @@ export class TreatmentService {
     });
 
     const patient = await this.prisma.patientProfile.findUnique({
-      where: { id: dto.patientId },
+      where: { id: plan.patientId },
       select: { userId: true },
     });
     if (patient) {
       await this.notifications.notify(patient.userId, {
         type: NotificationType.MEDICATION_REMINDER,
         title: 'New prescription',
-        body: `Your doctor prescribed ${dto.items.length} medication(s). Reminders are scheduled.`,
+        message: `Your doctor prescribed ${dto.items.length} medication(s). Reminders are scheduled.`,
         data: { screen: 'prescriptions', id: String(prescription.id) },
       });
     }
@@ -209,12 +243,26 @@ export class TreatmentService {
       patientId,
       ConsentType.VIEW_RECORDS,
     );
-    const where = { patientId };
+    const where: Prisma.PrescriptionWhereInput = {
+      treatmentPlan: { patientId },
+    };
     const [items, total] = await this.prisma.$transaction([
       this.prisma.prescription.findMany({
         where,
-        include: { items: { include: { medicine: true } } },
-        orderBy: { issuedAt: 'desc' },
+        include: {
+          items: { include: { medicine: true } },
+          treatmentPlan: {
+            select: {
+              id: true,
+              description: true,
+              patientId: true,
+              doctor: {
+                select: { id: true, firstName: true, lastName: true },
+              },
+            },
+          },
+        },
+        orderBy: { date: 'desc' },
         skip: (page - 1) * limit,
         take: limit,
       }),
@@ -227,23 +275,59 @@ export class TreatmentService {
     const prescription = await this.getPrescriptionWithItems(id);
     await this.consent.assertCanAccessPatient(
       requester,
-      prescription.patientId,
+      prescription.treatmentPlan.patientId,
       ConsentType.VIEW_RECORDS,
     );
     return prescription;
   }
 
   // -------------------------------------------------------------------------
-  // Medication doses (patient side)
+  // Medicine catalog (ERD #19)
+  // -------------------------------------------------------------------------
+
+  async searchMedicines(query: SearchMedicinesDto) {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 20;
+    const where: Prisma.MedicineWhereInput = {
+      status: EntityStatus.ACTIVE,
+      ...(query.form ? { form: query.form } : {}),
+      ...(query.q
+        ? {
+            OR: [
+              { name: { contains: query.q, mode: Prisma.QueryMode.insensitive } },
+              {
+                genericName: {
+                  contains: query.q,
+                  mode: Prisma.QueryMode.insensitive,
+                },
+              },
+            ],
+          }
+        : {}),
+    };
+    const [items, total] = await this.prisma.$transaction([
+      this.prisma.medicine.findMany({
+        where,
+        orderBy: { name: 'asc' },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      this.prisma.medicine.count({ where }),
+    ]);
+    return { items, total, page, limit };
+  }
+
+  // -------------------------------------------------------------------------
+  // Medicine tracking (ERD #21, patient side)
   // -------------------------------------------------------------------------
 
   async upcomingDoses(requester: AuthenticatedUser, hours: number) {
     const patient = await this.profiles.getPatientByUserId(requester.id);
-    return this.prisma.medicationDose.findMany({
+    return this.prisma.medicineTracking.findMany({
       where: {
         patientId: patient.id,
-        status: MedicationDoseStatus.SCHEDULED,
-        scheduledAt: {
+        status: MedicineTrackingStatus.SCHEDULED,
+        scheduledTime: {
           gte: new Date(Date.now() - 60 * 60 * 1000), // still takeable (1h grace)
           lte: new Date(Date.now() + hours * 60 * 60 * 1000),
         },
@@ -251,24 +335,31 @@ export class TreatmentService {
       include: {
         prescriptionItem: { include: { medicine: true } },
       },
-      orderBy: { scheduledAt: 'asc' },
+      orderBy: { scheduledTime: 'asc' },
     });
   }
 
-  async takeDose(requester: AuthenticatedUser, doseId: number) {
-    const patient = await this.profiles.getPatientByUserId(requester.id);
-    const dose = await this.prisma.medicationDose.findUnique({
-      where: { id: doseId },
+  async takeDose(requester: AuthenticatedUser, trackingId: number) {
+    const dose = await this.getOwnDose(requester, trackingId);
+    return this.prisma.medicineTracking.update({
+      where: { id: dose.id },
+      data: {
+        status: MedicineTrackingStatus.TAKEN,
+        takenTime: new Date(),
+      },
     });
-    if (!dose || dose.patientId !== patient.id) {
-      throw new NotFoundException('Dose not found.');
-    }
-    if (dose.status !== MedicationDoseStatus.SCHEDULED) {
-      throw new BadRequestException(`Dose is already ${dose.status}.`);
-    }
-    return this.prisma.medicationDose.update({
-      where: { id: doseId },
-      data: { status: MedicationDoseStatus.TAKEN, takenAt: new Date() },
+  }
+
+  /** ERD MedicineTracking.Status SKIPPED — a deliberate, recorded omission. */
+  async skipDose(
+    requester: AuthenticatedUser,
+    trackingId: number,
+    dto: SkipDoseDto,
+  ) {
+    const dose = await this.getOwnDose(requester, trackingId);
+    return this.prisma.medicineTracking.update({
+      where: { id: dose.id },
+      data: { status: MedicineTrackingStatus.SKIPPED, notes: dto.notes },
     });
   }
 
@@ -287,14 +378,14 @@ export class TreatmentService {
       ConsentType.VIEW_RECORDS,
     );
     const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
-    const grouped = await this.prisma.medicationDose.groupBy({
+    const grouped = await this.prisma.medicineTracking.groupBy({
       by: ['status'],
-      where: { patientId, scheduledAt: { gte: since, lte: new Date() } },
+      where: { patientId, scheduledTime: { gte: since, lte: new Date() } },
       _count: { _all: true },
     });
     const counts = Object.fromEntries(
       grouped.map((g) => [g.status, g._count._all]),
-    ) as Partial<Record<MedicationDoseStatus, number>>;
+    ) as Partial<Record<MedicineTrackingStatus, number>>;
 
     const taken = counts.TAKEN ?? 0;
     const missed = counts.MISSED ?? 0;
@@ -313,6 +404,20 @@ export class TreatmentService {
 
   // -------------------------------------------------------------------------
 
+  private async getOwnDose(requester: AuthenticatedUser, trackingId: number) {
+    const patient = await this.profiles.getPatientByUserId(requester.id);
+    const dose = await this.prisma.medicineTracking.findUnique({
+      where: { id: trackingId },
+    });
+    if (!dose || dose.patientId !== patient.id) {
+      throw new NotFoundException('Dose not found.');
+    }
+    if (dose.status !== MedicineTrackingStatus.SCHEDULED) {
+      throw new BadRequestException(`Dose is already ${dose.status}.`);
+    }
+    return dose;
+  }
+
   private generateSchedule(item: PrescriptionItemDto): Date[] {
     const hours = SLOT_HOURS[item.timesPerDay];
     const dates: Date[] = [];
@@ -321,7 +426,9 @@ export class TreatmentService {
     for (let day = 1; day <= item.durationDays; day++) {
       for (const hour of hours) {
         dates.push(
-          new Date(start.getTime() + day * 24 * 60 * 60 * 1000 + hour * 60 * 60 * 1000),
+          new Date(
+            start.getTime() + day * 24 * 60 * 60 * 1000 + hour * 60 * 60 * 1000,
+          ),
         );
       }
     }
@@ -339,10 +446,20 @@ export class TreatmentService {
         strength: item.strength ?? null,
       },
     });
-    if (existing) return existing;
+    if (existing) {
+      // Enrich the catalog entry when the doctor supplies a generic name.
+      if (item.genericName && !existing.genericName) {
+        return tx.medicine.update({
+          where: { id: existing.id },
+          data: { genericName: item.genericName },
+        });
+      }
+      return existing;
+    }
     return tx.medicine.create({
       data: {
         name: item.medicineName,
+        genericName: item.genericName ?? null,
         form: item.form ?? null,
         strength: item.strength ?? null,
       },
@@ -352,7 +469,17 @@ export class TreatmentService {
   private async getPrescriptionWithItems(id: number) {
     const prescription = await this.prisma.prescription.findUnique({
       where: { id },
-      include: { items: { include: { medicine: true } } },
+      include: {
+        items: { include: { medicine: true } },
+        treatmentPlan: {
+          select: {
+            id: true,
+            description: true,
+            patientId: true,
+            doctorId: true,
+          },
+        },
+      },
     });
     if (!prescription) throw new NotFoundException('Prescription not found.');
     return prescription;
