@@ -4,17 +4,29 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { ChatType, Role, User } from '@prisma/client';
+import {
+  CareLinkStatus,
+  ChatStatus,
+  ChatType,
+  MessageStatus,
+  ParticipantStatus,
+  Role,
+  User,
+  UserStatus,
+} from '@prisma/client';
 import type { AuthenticatedUser } from '../common/decorators/current-user.decorator';
+import { USER_NAME_INCLUDE, displayName } from '../common/utils/user-name.util';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateChatDto, SendMessageDto } from './dto/chat.dtos';
 
 /**
- * Chat persistence + access rules. Real-time delivery lives in ChatGateway;
- * both the gateway and the REST controller go through this service, so the
- * rules cannot be bypassed.
+ * ERD #27 Chat / #28 ChatParticipant / #29 Message.
  *
- * Who may chat with whom (privacy rule):
+ * Persistence + access rules. Real-time delivery lives in ChatGateway; both
+ * the gateway and the REST controller go through this service, so the rules
+ * cannot be bypassed.
+ *
+ * Who may chat with whom (TR-006 privacy rule):
  *   doctor ↔ patient they treat · caregiver ↔ their linked patient · admin ↔ anyone
  */
 @Injectable()
@@ -32,15 +44,25 @@ export class ChatService {
     const other = await this.prisma.user.findUnique({
       where: { id: dto.otherUserId },
     });
-    if (!other || !other.isActive) throw new NotFoundException('User not found.');
+    if (!other || other.status !== UserStatus.ACTIVE) {
+      throw new NotFoundException('User not found.');
+    }
 
     await this.assertCanChat(requester, other);
+
+    if (dto.visitId) {
+      const visit = await this.prisma.visit.findUnique({
+        where: { id: dto.visitId },
+        select: { id: true },
+      });
+      if (!visit) throw new BadRequestException('visitId does not exist.');
+    }
 
     // Reuse the existing direct chat between these two users.
     const existing = await this.prisma.chat.findFirst({
       where: {
         type: ChatType.DIRECT,
-        isActive: true,
+        status: ChatStatus.ACTIVE,
         AND: [
           { participants: { some: { userId: requester.id } } },
           { participants: { some: { userId: other.id } } },
@@ -64,7 +86,10 @@ export class ChatService {
 
   /** Chat list with the other participant, last message, and unread count. */
   async listMyChats(userId: number, page: number, limit: number) {
-    const where = { isActive: true, participants: { some: { userId } } };
+    const where = {
+      status: ChatStatus.ACTIVE,
+      participants: { some: { userId, status: ParticipantStatus.ACTIVE } },
+    };
     const [chats, total] = await this.prisma.$transaction([
       this.prisma.chat.findMany({
         where,
@@ -72,15 +97,27 @@ export class ChatService {
           participants: {
             include: {
               user: {
-                select: { id: true, firstName: true, lastName: true, avatarUrl: true, role: true },
+                select: {
+                  id: true,
+                  email: true,
+                  avatarUrl: true,
+                  role: true,
+                  ...USER_NAME_INCLUDE,
+                },
               },
             },
           },
           messages: {
-            where: { deletedAt: null },
+            where: { status: { not: MessageStatus.DELETED } },
             orderBy: { sentAt: 'desc' },
             take: 1,
-            select: { id: true, senderId: true, text: true, sentAt: true },
+            select: {
+              id: true,
+              senderId: true,
+              messageText: true,
+              sentAt: true,
+              status: true,
+            },
           },
         },
         orderBy: { createdAt: 'desc' },
@@ -96,7 +133,7 @@ export class ChatService {
         const unread = await this.prisma.message.count({
           where: {
             chatId: chat.id,
-            deletedAt: null,
+            status: { not: MessageStatus.DELETED },
             senderId: { not: userId },
             sentAt: me?.lastReadAt ? { gt: me.lastReadAt } : undefined,
           },
@@ -104,10 +141,17 @@ export class ChatService {
         return {
           id: chat.id,
           type: chat.type,
+          status: chat.status,
           visitId: chat.visitId,
           others: chat.participants
             .filter((p) => p.userId !== userId)
-            .map((p) => p.user),
+            .map((p) => ({
+              id: p.user.id,
+              fullName: displayName(p.user),
+              avatarUrl: p.user.avatarUrl,
+              role: p.user.role,
+              participantStatus: p.status,
+            })),
           lastMessage: chat.messages[0] ?? null,
           unread,
         };
@@ -117,21 +161,30 @@ export class ChatService {
   }
 
   /** Message history, newest first, cursor-based for infinite scroll. */
-  async getMessages(userId: number, chatId: number, cursor: number | undefined, limit: number) {
+  async getMessages(
+    userId: number,
+    chatId: number,
+    cursor: number | undefined,
+    limit: number,
+  ) {
     await this.assertParticipant(userId, chatId);
-    const items = await this.prisma.message.findMany({
+    const rows = await this.prisma.message.findMany({
       where: {
         chatId,
-        deletedAt: null,
+        status: { not: MessageStatus.DELETED },
         ...(cursor ? { id: { lt: cursor } } : {}),
       },
       include: {
-        sender: { select: { id: true, firstName: true, lastName: true } },
+        sender: { select: { id: true, email: true, ...USER_NAME_INCLUDE } },
         file: { select: { id: true, url: true, mimeType: true } },
       },
       orderBy: { id: 'desc' },
       take: limit,
     });
+    const items = rows.map((m) => ({
+      ...m,
+      sender: { id: m.sender.id, fullName: displayName(m.sender) },
+    }));
     return {
       items,
       nextCursor: items.length === limit ? items[items.length - 1].id : null,
@@ -140,7 +193,7 @@ export class ChatService {
 
   async sendMessage(userId: number, chatId: number, dto: SendMessageDto) {
     await this.assertParticipant(userId, chatId);
-    if (!dto.text?.trim() && !dto.fileId) {
+    if (!dto.messageText?.trim() && !dto.fileId) {
       throw new BadRequestException('Message needs text or a file.');
     }
     if (dto.fileId) {
@@ -152,27 +205,75 @@ export class ChatService {
         throw new BadRequestException('fileId must be a file you uploaded.');
       }
     }
-    return this.prisma.message.create({
+    const message = await this.prisma.message.create({
       data: {
         chatId,
         senderId: userId,
-        text: dto.text?.trim() ?? '',
+        messageText: dto.messageText?.trim() ?? '',
         fileId: dto.fileId ?? null,
       },
       include: {
-        sender: { select: { id: true, firstName: true, lastName: true } },
+        sender: { select: { id: true, email: true, ...USER_NAME_INCLUDE } },
         file: { select: { id: true, url: true, mimeType: true } },
       },
     });
+    return {
+      ...message,
+      sender: { id: message.sender.id, fullName: displayName(message.sender) },
+    };
   }
 
+  /**
+   * Marks the chat read for this participant and flips the other side's
+   * messages to READ (ERD Message.Status / Message.ReadAt).
+   */
   async markRead(userId: number, chatId: number) {
+    const participant = await this.assertParticipant(userId, chatId);
+    const readAt = new Date();
+    await this.prisma.$transaction([
+      this.prisma.chatParticipant.update({
+        where: { id: participant.id },
+        data: { lastReadAt: readAt },
+      }),
+      this.prisma.message.updateMany({
+        where: {
+          chatId,
+          senderId: { not: userId },
+          readAt: null,
+          status: { not: MessageStatus.DELETED },
+        },
+        data: { readAt, status: MessageStatus.READ },
+      }),
+    ]);
+    return { chatId, readAt };
+  }
+
+  /** ERD ChatParticipant.Status LEFT — stop receiving this conversation. */
+  async leave(userId: number, chatId: number) {
     const participant = await this.assertParticipant(userId, chatId);
     await this.prisma.chatParticipant.update({
       where: { id: participant.id },
-      data: { lastReadAt: new Date() },
+      data: { status: ParticipantStatus.LEFT },
     });
-    return { chatId, readAt: new Date() };
+    return { chatId, left: true };
+  }
+
+  /** ERD Message.Status DELETED — soft delete, sender only. */
+  async deleteMessage(userId: number, messageId: number) {
+    const message = await this.prisma.message.findUnique({
+      where: { id: messageId },
+      select: { id: true, senderId: true, status: true },
+    });
+    if (!message || message.status === MessageStatus.DELETED) {
+      throw new NotFoundException('Message not found.');
+    }
+    if (message.senderId !== userId) {
+      throw new ForbiddenException('You can only delete your own messages.');
+    }
+    return this.prisma.message.update({
+      where: { id: messageId },
+      data: { status: MessageStatus.DELETED },
+    });
   }
 
   // -------------------------------------------------------------------------
@@ -183,7 +284,7 @@ export class ChatService {
     const participant = await this.prisma.chatParticipant.findUnique({
       where: { chatId_userId: { chatId, userId } },
     });
-    if (!participant) {
+    if (!participant || participant.status !== ParticipantStatus.ACTIVE) {
       throw new ForbiddenException('You are not a participant of this chat.');
     }
     return participant;
@@ -191,7 +292,7 @@ export class ChatService {
 
   async participantUserIds(chatId: number): Promise<number[]> {
     const rows = await this.prisma.chatParticipant.findMany({
-      where: { chatId },
+      where: { chatId, status: ParticipantStatus.ACTIVE },
       select: { userId: true },
     });
     return rows.map((r) => r.userId);
@@ -204,15 +305,16 @@ export class ChatService {
 
     const pair = new Set([requester.role, other.role]);
     if (pair.has(Role.DOCTOR) && pair.has(Role.PATIENT)) {
-      const doctorUserId = requester.role === Role.DOCTOR ? requester.id : other.id;
-      const patientUserId = requester.role === Role.PATIENT ? requester.id : other.id;
+      const doctorUserId =
+        requester.role === Role.DOCTOR ? requester.id : other.id;
+      const patientUserId =
+        requester.role === Role.PATIENT ? requester.id : other.id;
+      // BR-004 makes every visit hang off an appointment, so an appointment
+      // between the two IS the treating relationship.
       const treating = await this.prisma.doctorProfile.findFirst({
         where: {
           userId: doctorUserId,
-          OR: [
-            { appointments: { some: { patient: { userId: patientUserId } } } },
-            { visits: { some: { patient: { userId: patientUserId } } } },
-          ],
+          appointments: { some: { patient: { userId: patientUserId } } },
         },
         select: { id: true },
       });
@@ -223,11 +325,13 @@ export class ChatService {
     }
 
     if (pair.has(Role.CAREGIVER) && pair.has(Role.PATIENT)) {
-      const caregiverUserId = requester.role === Role.CAREGIVER ? requester.id : other.id;
-      const patientUserId = requester.role === Role.PATIENT ? requester.id : other.id;
+      const caregiverUserId =
+        requester.role === Role.CAREGIVER ? requester.id : other.id;
+      const patientUserId =
+        requester.role === Role.PATIENT ? requester.id : other.id;
       const link = await this.prisma.patientCaregiver.findFirst({
         where: {
-          isActive: true,
+          status: CareLinkStatus.ACTIVE,
           caregiver: { userId: caregiverUserId },
           patient: { userId: patientUserId },
         },

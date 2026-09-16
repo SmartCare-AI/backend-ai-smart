@@ -18,20 +18,29 @@ export class CreateChatDto {
   @IsInt()
   otherUserId!: number;
 
-  @ApiPropertyOptional({ example: 1, description: 'Link this consultation to a visit.' })
+  @ApiPropertyOptional({
+    example: 1,
+    description: 'Link this consultation to a visit (TR-004).',
+  })
   @IsOptional()
   @IsInt()
   visitId?: number;
 }
 
 export class SendMessageDto {
-  @ApiPropertyOptional({ example: 'Good morning doctor, my readings are attached.' })
+  @ApiPropertyOptional({
+    example: 'Good morning doctor, my readings are attached.',
+    description: 'ERD Message.MessageText. Required unless a fileId is given.',
+  })
   @ValidateIf((o: SendMessageDto) => !o.fileId)
   @IsString()
   @MaxLength(4000)
-  text?: string;
+  messageText?: string;
 
-  @ApiPropertyOptional({ example: 3, description: 'Attachment file id (uploads module).' })
+  @ApiPropertyOptional({
+    example: 3,
+    description: 'Attachment file id (uploads module).',
+  })
   @IsOptional()
   @IsInt()
   fileId?: number;

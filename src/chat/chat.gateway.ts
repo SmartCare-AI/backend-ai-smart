@@ -9,10 +9,11 @@ import {
   WebSocketGateway,
   WebSocketServer,
 } from '@nestjs/websockets';
-import { NotificationType } from '@prisma/client';
+import { NotificationType, UserStatus } from '@prisma/client';
 import { Server, Socket } from 'socket.io';
 import type { JwtPayload } from '../auth/strategies/jwt.strategy';
 import { NotificationsService } from '../notifications/notifications.service';
+import { USER_NAME_INCLUDE, displayName } from '../common/utils/user-name.util';
 import { PrismaService } from '../prisma/prisma.service';
 import { ChatService } from './chat.service';
 
@@ -25,7 +26,7 @@ import { ChatService } from './chat.service';
  * Client → server events:
  *   chat:join    {chatId}                    join a chat room (must be participant)
  *   chat:leave   {chatId}
- *   chat:send    {chatId, text?, fileId?}    send a message
+ *   chat:send    {chatId, messageText?, fileId?}  send a message
  *   chat:typing  {chatId, isTyping}          typing indicator
  *   chat:read    {chatId}                    mark chat read
  *   call:invite  {chatId, callType}          start a video/audio call
@@ -73,9 +74,11 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       const payload = await this.jwt.verifyAsync<JwtPayload>(token);
       const user = await this.prisma.user.findUnique({
         where: { id: payload.sub },
-        select: { id: true, isActive: true },
+        select: { id: true, status: true },
       });
-      if (!user || !user.isActive) throw new Error('account not found');
+      if (!user || user.status !== UserStatus.ACTIVE) {
+        throw new Error('account not found');
+      }
 
       client.data.userId = user.id;
       await client.join(`user:${user.id}`);
@@ -134,14 +137,16 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @SubscribeMessage('chat:send')
   async onSend(
     @ConnectedSocket() client: Socket,
-    @MessageBody() body: { chatId?: number; text?: string; fileId?: number },
+    @MessageBody()
+    body: { chatId?: number; messageText?: string; fileId?: number },
   ) {
     const userId = client.data.userId as number;
     const chatId = Number(body?.chatId);
     if (!chatId) return this.fail(client, 'chatId required');
     try {
       const message = await this.chatService.sendMessage(userId, chatId, {
-        text: typeof body.text === 'string' ? body.text : undefined,
+        messageText:
+          typeof body.messageText === 'string' ? body.messageText : undefined,
         fileId: body.fileId ? Number(body.fileId) : undefined,
       });
       await this.dispatchMessage(chatId, message);
@@ -210,7 +215,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     // Ring offline participants via push so the phone wakes up.
     const caller = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { firstName: true, lastName: true },
+      select: { email: true, ...USER_NAME_INCLUDE },
     });
     const others = (await this.chatService.participantUserIds(chatId)).filter(
       (id) => id !== userId && !this.isOnline(id),
@@ -218,7 +223,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     await this.notifications.notifyMany(others, {
       type: NotificationType.CHAT,
       title: `Incoming ${callType} call`,
-      body: `${caller?.firstName ?? 'Someone'} ${caller?.lastName ?? ''} is calling you.`,
+      message: `${caller ? displayName(caller) : 'Someone'} is calling you.`,
       data: { screen: 'call', chatId: String(chatId) },
     });
     return { ringing: chatId };
@@ -254,7 +259,12 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   async dispatchMessage(
     chatId: number,
-    message: { id: number; senderId: number; text: string; sender: { firstName: string; lastName: string } },
+    message: {
+      id: number;
+      senderId: number;
+      messageText: string;
+      sender: { fullName: string };
+    },
   ) {
     this.server.to(this.room(chatId)).emit('chat:message', message);
 
@@ -264,8 +274,10 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     if (offline.length > 0) {
       await this.notifications.notifyMany(offline, {
         type: NotificationType.CHAT,
-        title: `${message.sender.firstName} ${message.sender.lastName}`,
-        body: message.text ? message.text.slice(0, 120) : '📎 Attachment',
+        title: message.sender.fullName,
+        message: message.messageText
+          ? message.messageText.slice(0, 120)
+          : '📎 Attachment',
         data: { screen: 'chat', id: String(chatId) },
       });
     }

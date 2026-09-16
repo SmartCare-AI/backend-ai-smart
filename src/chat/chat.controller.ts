@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   HttpStatus,
@@ -99,11 +100,42 @@ export class ChatController {
 
   @Patch(':id/read')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Mark a chat as read (clears the unread badge)' })
+  @ApiOperation({
+    summary: 'Mark a chat as read (clears the unread badge)',
+    description:
+      'Also flips the other side’s messages to READ with a ReadAt timestamp (ERD Message.Status).',
+  })
   markRead(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id', ParseIntPipe) id: number,
   ) {
     return this.chatService.markRead(user.id, id);
+  }
+
+  @Patch(':id/leave')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Leave a conversation',
+    description: 'ERD ChatParticipant.Status LEFT — stops delivery to this user.',
+  })
+  leave(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return this.chatService.leave(user.id, id);
+  }
+
+  @Delete('messages/:messageId')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Delete one of my messages (soft delete)',
+    description: 'ERD Message.Status DELETED — the row is retained, the text is hidden.',
+  })
+  @ApiResponse({ status: 403, description: 'Not the sender.' })
+  deleteMessage(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('messageId', ParseIntPipe) messageId: number,
+  ) {
+    return this.chatService.deleteMessage(user.id, messageId);
   }
 }
