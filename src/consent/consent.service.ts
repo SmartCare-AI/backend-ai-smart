@@ -3,22 +3,30 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { ConsentStatus, ConsentType, Role } from '@prisma/client';
+import {
+  CareLinkStatus,
+  ConsentStatus,
+  ConsentType,
+  Role,
+} from '@prisma/client';
 import type { AuthenticatedUser } from '../common/decorators/current-user.decorator';
 import { PrismaService } from '../prisma/prisma.service';
 
 /**
- * THE rule for touching patient data. Every service that reads or writes a
- * patient's medical information calls assertCanAccessPatient() first —
- * controllers know WHO is asking, this service decides MAY THEY.
+ * THE rule for touching patient data (SEC-002 RBAC + SEC-003 consent). Every
+ * service that reads or writes a patient's medical information calls
+ * assertCanAccessPatient() first — controllers know WHO is asking, this
+ * service decides MAY THEY.
  *
  * Access matrix:
  *  - ADMIN                → always
  *  - the patient themself → always
- *  - DOCTOR              → only with a treating relationship
- *                           (appointment or visit with this patient)
- *  - CAREGIVER           → only with an active PatientCaregiver link or an
- *                           explicit Consent row covering the needed type
+ *  - DOCTOR               → only with a treating relationship. Since BR-004
+ *                            makes every Visit hang off an Appointment, an
+ *                            appointment with the patient IS the relationship.
+ *  - CAREGIVER            → only with an active PatientCaregiver link
+ *                            (BR-003) or an explicit Consent row covering the
+ *                            needed type
  */
 @Injectable()
 export class ConsentService {
@@ -43,10 +51,7 @@ export class ConsentService {
       const treating = await this.prisma.doctorProfile.findFirst({
         where: {
           userId: requester.id,
-          OR: [
-            { appointments: { some: { patientId: patient.id } } },
-            { visits: { some: { patientId: patient.id } } },
-          ],
+          appointments: { some: { patientId: patient.id } },
         },
         select: { id: true },
       });
@@ -68,31 +73,26 @@ export class ConsentService {
       );
     }
 
-    // HOSPITAL_ADMIN gets aggregate dashboards (Phase G), not record access.
+    // HOSPITAL_ADMIN gets aggregate dashboards, not record access.
     throw new ForbiddenException('You do not have access to this patient.');
   }
 
   /**
-   * The patient's care circle: user ids of treating doctors (appointment or
-   * visit relationship) + caregivers allowed to receive alerts. This is the
-   * recipient list for alerts and emergencies.
+   * The patient's care circle: user ids of treating doctors + caregivers
+   * allowed to receive alerts. This is the recipient list for alerts and
+   * emergencies.
    */
   async patientCircleUserIds(patientId: number): Promise<number[]> {
     const [doctors, links] = await Promise.all([
       this.prisma.doctorProfile.findMany({
-        where: {
-          OR: [
-            { appointments: { some: { patientId } } },
-            { visits: { some: { patientId } } },
-          ],
-        },
+        where: { appointments: { some: { patientId } } },
         select: { userId: true },
       }),
       this.prisma.patientCaregiver.findMany({
         where: {
           patientId,
-          isActive: true,
-          permission: {
+          status: CareLinkStatus.ACTIVE,
+          permissionLevel: {
             in: [ConsentType.RECEIVE_ALERTS, ConsentType.FULL_ACCESS],
           },
           OR: [{ endDate: null }, { endDate: { gt: new Date() } }],
@@ -118,8 +118,8 @@ export class ConsentService {
     const link = await this.prisma.patientCaregiver.findFirst({
       where: {
         patientId: patientProfileId,
-        isActive: true,
-        permission: { in: acceptable },
+        status: CareLinkStatus.ACTIVE,
+        permissionLevel: { in: acceptable },
         caregiver: { userId: requesterUserId },
         OR: [{ endDate: null }, { endDate: { gt: new Date() } }],
       },

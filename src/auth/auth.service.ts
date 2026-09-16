@@ -8,10 +8,11 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
-import { AuthProvider, OtpType, User } from '@prisma/client';
+import { AuthProvider, OtpType, Role, User, UserStatus } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 import { createHash, randomBytes, randomInt } from 'crypto';
 import type { SessionMeta } from '../common/decorators/session-meta.decorator';
+import { firstName as firstNameOf } from '../common/utils/user-name.util';
 import { FirebaseService } from '../firebase/firebase.service';
 import { MailService } from '../mail/mail.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -30,6 +31,13 @@ const OTP_MAX_ATTEMPTS = 5;
 
 const KNOWN_PLATFORMS = new Set(['ios', 'android', 'web']);
 
+/** Loads the role profiles so responses and emails can resolve a name. */
+const PROFILE_INCLUDE = {
+  patientProfile: true,
+  doctorProfile: true,
+  caregiverProfile: true,
+} as const;
+
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
@@ -47,6 +55,11 @@ export class AuthService {
   // Registration & email verification
   // -------------------------------------------------------------------------
 
+  /**
+   * Creates the account and its Patient profile. Per the ERD the account row
+   * holds no personal identity, so `firstName`/`lastName` from the request are
+   * stored on PatientProfile (#2), not on User (#1).
+   */
   async register(dto: RegisterDto): Promise<{ message: string }> {
     const email = dto.email.toLowerCase();
     const existing = await this.prisma.user.findUnique({ where: { email } });
@@ -62,27 +75,26 @@ export class AuthService {
     const user = existing
       ? await this.prisma.user.update({
           where: { id: existing.id },
-          data: {
-            password,
-            firstName: dto.firstName,
-            lastName: dto.lastName,
-            phone: dto.phone ?? null,
-          },
+          data: { password, phone: dto.phone ?? null },
         })
       : await this.prisma.user.create({
-          data: {
-            email,
-            password,
-            firstName: dto.firstName,
-            lastName: dto.lastName,
-            phone: dto.phone ?? null,
-          },
+          data: { email, password, phone: dto.phone ?? null },
         });
 
     // New accounts are patients by default — give them their medical record.
-    await this.profiles.ensurePatientProfile(user.id);
+    await this.profiles.ensurePatientProfile(user.id, {
+      firstName: dto.firstName,
+      lastName: dto.lastName,
+    });
+    if (existing) {
+      // Keep the re-submitted name on an unverified retry.
+      await this.prisma.patientProfile.updateMany({
+        where: { userId: user.id },
+        data: { firstName: dto.firstName, lastName: dto.lastName },
+      });
+    }
 
-    await this.issueOtp(user, OtpType.EMAIL_VERIFICATION);
+    await this.issueOtp(user, OtpType.EMAIL_VERIFICATION, dto.firstName);
     return {
       message:
         'Registration successful. A 6-digit verification code has been sent to your email.',
@@ -112,9 +124,10 @@ export class AuthService {
     };
     const user = await this.prisma.user.findUnique({
       where: { email: email.toLowerCase() },
+      include: PROFILE_INCLUDE,
     });
     if (user && !user.isEmailVerified) {
-      await this.issueOtp(user, OtpType.EMAIL_VERIFICATION);
+      await this.issueOtp(user, OtpType.EMAIL_VERIFICATION, firstNameOf(user));
     }
     return generic;
   }
@@ -137,9 +150,7 @@ export class AuthService {
     if (!user || !user.password || !passwordOk) {
       throw new UnauthorizedException('Invalid email or password.');
     }
-    if (!user.isActive) {
-      throw new ForbiddenException('This account has been deactivated.');
-    }
+    this.assertAccountUsable(user);
     if (!user.isEmailVerified) {
       throw new ForbiddenException(
         'Email not verified. Please verify your email or request a new code.',
@@ -166,9 +177,7 @@ export class AuthService {
     if (!stored || stored.revokedAt || stored.expiresAt < new Date()) {
       throw new UnauthorizedException('Invalid or expired refresh token.');
     }
-    if (!stored.user.isActive) {
-      throw new ForbiddenException('This account has been deactivated.');
-    }
+    this.assertAccountUsable(stored.user);
 
     // Rotation: each refresh token is single-use.
     await this.prisma.refreshToken.update({
@@ -178,7 +187,10 @@ export class AuthService {
     return this.buildAuthResponse(stored.user, meta);
   }
 
-  async logout(userId: number, refreshToken: string): Promise<{ message: string }> {
+  async logout(
+    userId: number,
+    refreshToken: string,
+  ): Promise<{ message: string }> {
     await this.prisma.refreshToken.updateMany({
       where: { userId, tokenHash: this.sha256(refreshToken), revokedAt: null },
       data: { revokedAt: new Date() },
@@ -197,10 +209,11 @@ export class AuthService {
     };
     const user = await this.prisma.user.findUnique({
       where: { email: email.toLowerCase() },
+      include: PROFILE_INCLUDE,
     });
     // Social-only accounts (no password) cannot reset a password.
     if (user && user.password) {
-      await this.issueOtp(user, OtpType.PASSWORD_RESET);
+      await this.issueOtp(user, OtpType.PASSWORD_RESET, firstNameOf(user));
     }
     return generic;
   }
@@ -260,10 +273,17 @@ export class AuthService {
       where: { firebaseUid: decoded.uid },
     });
 
+    // Name parts from the social profile — only used when we have to create
+    // the patient profile ourselves.
+    const [socialFirstName = 'Shifaa', ...rest] = (decoded.name ?? '')
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean);
+    const socialLastName = rest.join(' ') || 'User';
+
     if (!user) {
       // Link to an existing email account, or provision a new one.
       const byEmail = await this.prisma.user.findUnique({ where: { email } });
-      const [firstName = 'SmartCare', ...rest] = (decoded.name ?? '').split(' ');
       user = byEmail
         ? await this.prisma.user.update({
             where: { id: byEmail.id },
@@ -278,21 +298,20 @@ export class AuthService {
               email,
               firebaseUid: decoded.uid,
               provider,
-              firstName,
-              lastName: rest.join(' ') || 'User',
               avatarUrl: decoded.picture ?? null,
               isEmailVerified: true,
             },
           });
     }
 
-    if (!user.isActive) {
-      throw new ForbiddenException('This account has been deactivated.');
-    }
+    this.assertAccountUsable(user);
 
     // Social accounts default to PATIENT — ensure the medical record exists.
-    if (user.role === 'PATIENT') {
-      await this.profiles.ensurePatientProfile(user.id);
+    if (user.role === Role.PATIENT) {
+      await this.profiles.ensurePatientProfile(user.id, {
+        firstName: socialFirstName,
+        lastName: socialLastName,
+      });
     }
     await this.prisma.user.update({
       where: { id: user.id },
@@ -304,6 +323,16 @@ export class AuthService {
   // -------------------------------------------------------------------------
   // Internals
   // -------------------------------------------------------------------------
+
+  /** ERD User.Status gate — INACTIVE and SUSPENDED accounts cannot sign in. */
+  private assertAccountUsable(user: User): void {
+    if (user.status === UserStatus.SUSPENDED) {
+      throw new ForbiddenException('This account has been suspended.');
+    }
+    if (user.status !== UserStatus.ACTIVE) {
+      throw new ForbiddenException('This account has been deactivated.');
+    }
+  }
 
   private async buildAuthResponse(
     user: User,
@@ -329,15 +358,24 @@ export class AuthService {
       },
     });
 
+    const withProfiles = await this.prisma.user.findUniqueOrThrow({
+      where: { id: user.id },
+      include: PROFILE_INCLUDE,
+    });
+
     return {
-      user: UserEntity.fromUser(user),
+      user: UserEntity.fromUser(withProfiles),
       accessToken,
       refreshToken,
     };
   }
 
   /** Generates a 6-digit code, emails it, and stores only its hash. */
-  private async issueOtp(user: User, type: OtpType): Promise<void> {
+  private async issueOtp(
+    user: User,
+    type: OtpType,
+    recipientName: string,
+  ): Promise<void> {
     const code = randomInt(0, 1_000_000).toString().padStart(6, '0');
 
     await this.prisma.$transaction([
@@ -354,9 +392,9 @@ export class AuthService {
     ]);
 
     if (type === OtpType.EMAIL_VERIFICATION) {
-      await this.mail.sendVerificationCode(user.email, user.firstName, code);
+      await this.mail.sendVerificationCode(user.email, recipientName, code);
     } else {
-      await this.mail.sendPasswordResetCode(user.email, user.firstName, code);
+      await this.mail.sendPasswordResetCode(user.email, recipientName, code);
     }
   }
 
