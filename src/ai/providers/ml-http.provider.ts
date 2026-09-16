@@ -1,10 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { RiskLevel } from '@prisma/client';
-import {
-  AiProvider,
-  TriageInput,
-  TriageResult,
-} from './ai-provider.interface';
+import { AiProvider, TriageInput, TriageResult } from './ai-provider.interface';
 import { RulesAiProvider } from './rules.provider';
 
 /**

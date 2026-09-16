@@ -36,7 +36,8 @@ export class CreateTreatmentPlanDto {
   diagnosisId?: number;
 
   @ApiProperty({
-    example: 'Glycemic control program: diet adjustment + metformin for 3 months.',
+    example:
+      'Glycemic control program: diet adjustment + metformin for 3 months.',
     description: 'ERD TreatmentPlan.Description — the planned treatment.',
   })
   @IsString()
@@ -170,7 +171,9 @@ export class CreatePrescriptionDto {
 }
 
 export class SkipDoseDto {
-  @ApiPropertyOptional({ example: 'Felt nauseous, skipped on doctor’s advice.' })
+  @ApiPropertyOptional({
+    example: 'Felt nauseous, skipped on doctor’s advice.',
+  })
   @IsOptional()
   @IsString()
   @MaxLength(500)

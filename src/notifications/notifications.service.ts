@@ -106,7 +106,10 @@ export class NotificationsService implements OnModuleInit {
     return { message: 'Device registered for push notifications.' };
   }
 
-  async removeToken(userId: number, token: string): Promise<{ message: string }> {
+  async removeToken(
+    userId: number,
+    token: string,
+  ): Promise<{ message: string }> {
     await this.prisma.deviceToken.updateMany({
       where: { userId, token, revokedAt: null },
       data: { revokedAt: new Date() },
@@ -207,7 +210,9 @@ export class NotificationsService implements OnModuleInit {
         where: { token: { in: result.invalidTokens } },
         data: { revokedAt: new Date() },
       });
-      this.logger.log(`Revoked ${result.invalidTokens.length} dead FCM token(s).`);
+      this.logger.log(
+        `Revoked ${result.invalidTokens.length} dead FCM token(s).`,
+      );
     }
   }
 }

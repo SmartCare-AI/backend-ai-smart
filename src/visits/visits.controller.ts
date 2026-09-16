@@ -60,7 +60,11 @@ export class VisitsController {
     @CurrentUser() user: AuthenticatedUser,
     @Query() query: PaginationDto,
   ) {
-    return this.visitsService.listMine(user, query.page ?? 1, query.limit ?? 20);
+    return this.visitsService.listMine(
+      user,
+      query.page ?? 1,
+      query.limit ?? 20,
+    );
   }
 
   @Get(':id')
@@ -138,7 +142,8 @@ export class DiagnosesController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Update a diagnosis status (ERD Diagnosis.Status)',
-    description: 'ACTIVE → RESOLVED / CHRONIC / RULED_OUT. Treating doctor only.',
+    description:
+      'ACTIVE → RESOLVED / CHRONIC / RULED_OUT. Treating doctor only.',
   })
   updateStatus(
     @CurrentUser() user: AuthenticatedUser,

@@ -22,11 +22,7 @@ import type { AuthenticatedUser } from '../common/decorators/current-user.decora
 import { PaginationDto } from '../common/dto/pagination.dto';
 import { ChatGateway } from './chat.gateway';
 import { ChatService } from './chat.service';
-import {
-  CreateChatDto,
-  GetMessagesDto,
-  SendMessageDto,
-} from './dto/chat.dtos';
+import { CreateChatDto, GetMessagesDto, SendMessageDto } from './dto/chat.dtos';
 
 @ApiTags('Chat')
 @ApiBearerAuth('access-token')
@@ -67,7 +63,8 @@ export class ChatController {
   @Get(':id/messages')
   @ApiOperation({
     summary: 'Message history (newest first, cursor pagination)',
-    description: 'Pass nextCursor from the previous page to scroll back in time.',
+    description:
+      'Pass nextCursor from the previous page to scroll back in time.',
   })
   messages(
     @CurrentUser() user: AuthenticatedUser,
@@ -116,7 +113,8 @@ export class ChatController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Leave a conversation',
-    description: 'ERD ChatParticipant.Status LEFT — stops delivery to this user.',
+    description:
+      'ERD ChatParticipant.Status LEFT — stops delivery to this user.',
   })
   leave(
     @CurrentUser() user: AuthenticatedUser,
@@ -129,7 +127,8 @@ export class ChatController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Delete one of my messages (soft delete)',
-    description: 'ERD Message.Status DELETED — the row is retained, the text is hidden.',
+    description:
+      'ERD Message.Status DELETED — the row is retained, the text is hidden.',
   })
   @ApiResponse({ status: 403, description: 'Not the sender.' })
   deleteMessage(

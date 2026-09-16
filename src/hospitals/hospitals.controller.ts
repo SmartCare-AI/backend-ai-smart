@@ -21,10 +21,7 @@ import {
   CreateHospitalDto,
   UpdateHospitalDto,
 } from './dto/hospital.dtos';
-import {
-  DepartmentEntity,
-  HospitalEntity,
-} from './entities/hospital.entities';
+import { DepartmentEntity, HospitalEntity } from './entities/hospital.entities';
 import { HospitalsService } from './hospitals.service';
 
 @ApiTags('Hospitals')
@@ -85,7 +82,10 @@ export class HospitalsController {
   @Roles(Role.ADMIN)
   @ApiOperation({ summary: 'Add a department to a hospital (admin)' })
   @ApiResponse({ status: 201, type: DepartmentEntity })
-  @ApiResponse({ status: 409, description: 'Department name already exists here.' })
+  @ApiResponse({
+    status: 409,
+    description: 'Department name already exists here.',
+  })
   addDepartment(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: CreateDepartmentDto,

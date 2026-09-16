@@ -338,7 +338,9 @@ export class ChatService {
         select: { id: true },
       });
       if (link) return;
-      throw new ForbiddenException('No active caregiver link with this patient.');
+      throw new ForbiddenException(
+        'No active caregiver link with this patient.',
+      );
     }
 
     throw new ForbiddenException('This user pair cannot open a chat.');

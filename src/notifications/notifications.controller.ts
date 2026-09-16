@@ -104,7 +104,8 @@ export class NotificationsController {
   @Patch(':id/archive')
   @ApiOperation({
     summary: 'Archive one notification',
-    description: 'ERD Notification.Status ARCHIVED — removes it from the unread badge.',
+    description:
+      'ERD Notification.Status ARCHIVED — removes it from the unread badge.',
   })
   @ApiResponse({ status: 200, type: NotificationEntity })
   archive(

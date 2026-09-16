@@ -44,7 +44,10 @@ export class UploadsController {
       'Uploads a file and returns its id + public URL. Reference the file id from other endpoints (e.g. medical reports later). Allowed: jpeg, png, webp, pdf — max 10 MB.',
   })
   @ApiResponse({ status: 201, type: FileEntity })
-  @ApiResponse({ status: 400, description: 'Missing file, bad type, or too large.' })
+  @ApiResponse({
+    status: 400,
+    description: 'Missing file, bad type, or too large.',
+  })
   upload(
     @CurrentUser() user: AuthenticatedUser,
     @UploadedFile() file: Express.Multer.File,

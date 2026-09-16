@@ -4,12 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import {
-  ConsentType,
-  DocumentStatus,
-  Prisma,
-  Role,
-} from '@prisma/client';
+import { ConsentType, DocumentStatus, Prisma, Role } from '@prisma/client';
 import type { AuthenticatedUser } from '../common/decorators/current-user.decorator';
 import { ConsentService } from '../consent/consent.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -47,7 +42,8 @@ export class DocumentsService {
       where: { id: dto.fileId },
       select: { id: true, ownerId: true },
     });
-    if (!file) throw new BadRequestException(`File ${dto.fileId} does not exist.`);
+    if (!file)
+      throw new BadRequestException(`File ${dto.fileId} does not exist.`);
     if (file.ownerId !== requester.id && requester.role !== Role.ADMIN) {
       throw new ForbiddenException('fileId must be a file you uploaded.');
     }

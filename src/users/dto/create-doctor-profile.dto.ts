@@ -45,7 +45,9 @@ export class CreateDoctorProfileDto {
   @Min(0)
   yearsOfExperience?: number;
 
-  @ApiPropertyOptional({ example: 'Consultant cardiologist, Cairo University.' })
+  @ApiPropertyOptional({
+    example: 'Consultant cardiologist, Cairo University.',
+  })
   @IsOptional()
   @IsString()
   @MaxLength(1000)

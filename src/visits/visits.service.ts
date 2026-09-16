@@ -213,7 +213,9 @@ export class VisitsService {
     dto: CreateDiagnosisDto,
   ) {
     const visit = await this.getOwnedVisit(requester, visitId, true);
-    return this.prisma.diagnosis.create({ data: { visitId: visit.id, ...dto } });
+    return this.prisma.diagnosis.create({
+      data: { visitId: visit.id, ...dto },
+    });
   }
 
   async updateDiagnosisStatus(

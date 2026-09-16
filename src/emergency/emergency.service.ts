@@ -79,7 +79,9 @@ export class EmergencyService implements OnModuleInit {
 
   onModuleInit() {
     this.queues.process(QUEUES.ESCALATIONS, (job: Job) =>
-      this.escalate((job.data as { emergencyEventId: number }).emergencyEventId),
+      this.escalate(
+        (job.data as { emergencyEventId: number }).emergencyEventId,
+      ),
     );
   }
 
@@ -88,7 +90,10 @@ export class EmergencyService implements OnModuleInit {
   // -------------------------------------------------------------------------
 
   /** Patient pressed the SOS button. */
-  async sos(requester: AuthenticatedUser, dto: SosDto): Promise<EmergencyEvent> {
+  async sos(
+    requester: AuthenticatedUser,
+    dto: SosDto,
+  ): Promise<EmergencyEvent> {
     const patient = await this.profiles.getPatientByUserId(requester.id);
 
     // Repeated presses (panic-tapping) reuse the active event.
@@ -218,13 +223,19 @@ export class EmergencyService implements OnModuleInit {
     return this.prisma.emergencyEvent.update({
       where: { id },
       data: {
-        status: falseAlarm ? EmergencyStatus.FALSE_ALARM : EmergencyStatus.RESOLVED,
+        status: falseAlarm
+          ? EmergencyStatus.FALSE_ALARM
+          : EmergencyStatus.RESOLVED,
         resolvedAt: new Date(),
       },
     });
   }
 
-  async list(requester: AuthenticatedUser, patientId: number, query: ListEmergencyDto) {
+  async list(
+    requester: AuthenticatedUser,
+    patientId: number,
+    query: ListEmergencyDto,
+  ) {
     await this.consent.assertCanAccessPatient(
       requester,
       patientId,
@@ -232,7 +243,10 @@ export class EmergencyService implements OnModuleInit {
     );
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
-    const where = { patientId, ...(query.status ? { status: query.status } : {}) };
+    const where = {
+      patientId,
+      ...(query.status ? { status: query.status } : {}),
+    };
     const [items, total] = await this.prisma.$transaction([
       this.prisma.emergencyEvent.findMany({
         where,
@@ -324,7 +338,10 @@ export class EmergencyService implements OnModuleInit {
     });
   }
 
-  async addContact(requester: AuthenticatedUser, dto: CreateEmergencyContactDto) {
+  async addContact(
+    requester: AuthenticatedUser,
+    dto: CreateEmergencyContactDto,
+  ) {
     const patient = await this.profiles.getPatientByUserId(requester.id);
     const count = await this.prisma.emergencyContact.count({
       where: { patientId: patient.id },
@@ -359,12 +376,17 @@ export class EmergencyService implements OnModuleInit {
   // -------------------------------------------------------------------------
 
   private async getOrThrow(id: number) {
-    const event = await this.prisma.emergencyEvent.findUnique({ where: { id } });
+    const event = await this.prisma.emergencyEvent.findUnique({
+      where: { id },
+    });
     if (!event) throw new NotFoundException('Emergency event not found.');
     return event;
   }
 
-  private async getOwnedContact(requester: AuthenticatedUser, contactId: number) {
+  private async getOwnedContact(
+    requester: AuthenticatedUser,
+    contactId: number,
+  ) {
     const patient = await this.profiles.getPatientByUserId(requester.id);
     const contact = await this.prisma.emergencyContact.findUnique({
       where: { id: contactId },

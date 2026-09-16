@@ -42,8 +42,14 @@ export class AppointmentsController {
       'Patients book for themselves; caregivers need MANAGE_APPOINTMENTS permission for the patient. Rejects slots overlapping an existing pending/confirmed appointment of the doctor. VIDEO/CHAT bookings automatically get an Online Visit with a meeting link.',
   })
   @ApiResponse({ status: 201, type: AppointmentEntity })
-  @ApiResponse({ status: 403, description: 'No permission to book for this patient.' })
-  @ApiResponse({ status: 409, description: 'Doctor is busy in that time slot.' })
+  @ApiResponse({
+    status: 403,
+    description: 'No permission to book for this patient.',
+  })
+  @ApiResponse({
+    status: 409,
+    description: 'Doctor is busy in that time slot.',
+  })
   create(
     @CurrentUser() user: AuthenticatedUser,
     @Body() dto: CreateAppointmentDto,
@@ -55,7 +61,10 @@ export class AppointmentsController {
   @ApiOperation({
     summary: 'My appointments (patient sees own, doctor sees own)',
   })
-  @ApiResponse({ status: 200, description: 'Paginated { items, total, page, limit }.' })
+  @ApiResponse({
+    status: 200,
+    description: 'Paginated { items, total, page, limit }.',
+  })
   listMine(
     @CurrentUser() user: AuthenticatedUser,
     @Query() query: ListAppointmentsDto,

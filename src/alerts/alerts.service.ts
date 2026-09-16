@@ -101,7 +101,8 @@ export class AlertsService {
       },
     });
 
-    const isEmergency = input.emergency ?? input.severity === RiskLevel.CRITICAL;
+    const isEmergency =
+      input.emergency ?? input.severity === RiskLevel.CRITICAL;
     if (isEmergency) {
       // Emergency engine owns the fan-out + SMS escalation timer.
       await this.emergency.openEvent({

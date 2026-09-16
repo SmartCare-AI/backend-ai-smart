@@ -82,7 +82,9 @@ export class TelemedicineService {
         meetingLink: this.generateMeetingLink(),
       },
     });
-    this.logger.log(`Online visit provisioned for appointment ${appointmentId}.`);
+    this.logger.log(
+      `Online visit provisioned for appointment ${appointmentId}.`,
+    );
   }
 
   /** Explicit creation (e.g. turning an in-person slot into a remote one). */
@@ -203,7 +205,12 @@ export class TelemedicineService {
             type: true,
             status: true,
             patient: {
-              select: { id: true, firstName: true, lastName: true, userId: true },
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                userId: true,
+              },
             },
             doctor: {
               select: {
@@ -244,7 +251,9 @@ export class TelemedicineService {
             select: {
               id: true,
               startTime: true,
-              patient: { select: { id: true, firstName: true, lastName: true } },
+              patient: {
+                select: { id: true, firstName: true, lastName: true },
+              },
               doctor: {
                 select: {
                   id: true,

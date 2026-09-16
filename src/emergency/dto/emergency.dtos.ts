@@ -17,7 +17,10 @@ import {
 import { PaginationDto } from '../../common/dto/pagination.dto';
 
 export class SosDto {
-  @ApiPropertyOptional({ example: 30.0444, description: 'GPS latitude at the moment of the SOS.' })
+  @ApiPropertyOptional({
+    example: 30.0444,
+    description: 'GPS latitude at the moment of the SOS.',
+  })
   @IsOptional()
   @IsNumber()
   @Min(-90)
@@ -62,7 +65,10 @@ export class CreateEmergencyContactDto {
   @MaxLength(100)
   name!: string;
 
-  @ApiProperty({ example: '+201001112223', description: 'E.164 format — receives emergency SMS.' })
+  @ApiProperty({
+    example: '+201001112223',
+    description: 'E.164 format — receives emergency SMS.',
+  })
   @IsPhoneNumber(undefined, {
     message: 'phone must be a valid number in E.164 format (e.g. +2010...)',
   })
@@ -74,7 +80,12 @@ export class CreateEmergencyContactDto {
   @MaxLength(50)
   relationship?: string;
 
-  @ApiPropertyOptional({ default: 1, minimum: 1, maximum: 5, description: 'SMS order: 1 first.' })
+  @ApiPropertyOptional({
+    default: 1,
+    minimum: 1,
+    maximum: 5,
+    description: 'SMS order: 1 first.',
+  })
   @IsOptional()
   @IsInt()
   @Min(1)
@@ -82,10 +93,15 @@ export class CreateEmergencyContactDto {
   priority?: number;
 }
 
-export class UpdateEmergencyContactDto extends PartialType(CreateEmergencyContactDto) {}
+export class UpdateEmergencyContactDto extends PartialType(
+  CreateEmergencyContactDto,
+) {}
 
 export class CreateFirstAidGuideDto {
-  @ApiProperty({ example: 'severe-bleeding', description: 'URL-safe unique id.' })
+  @ApiProperty({
+    example: 'severe-bleeding',
+    description: 'URL-safe unique id.',
+  })
   @Matches(/^[a-z0-9]+(-[a-z0-9]+)*$/, { message: 'slug must be kebab-case' })
   @MaxLength(80)
   slug!: string;
@@ -96,19 +112,28 @@ export class CreateFirstAidGuideDto {
   @MaxLength(150)
   title!: string;
 
-  @ApiProperty({ example: 'bleeding', description: 'bleeding | burns | choking | cpr | fractures | ...' })
+  @ApiProperty({
+    example: 'bleeding',
+    description: 'bleeding | burns | choking | cpr | fractures | ...',
+  })
   @IsString()
   @IsNotEmpty()
   @MaxLength(50)
   category!: string;
 
-  @ApiProperty({ example: '## Severe Bleeding\n1. Call emergency services...', description: 'Markdown.' })
+  @ApiProperty({
+    example: '## Severe Bleeding\n1. Call emergency services...',
+    description: 'Markdown.',
+  })
   @IsString()
   @IsNotEmpty()
   @MaxLength(20000)
   content!: string;
 
-  @ApiPropertyOptional({ example: 7, description: 'Illustration/video file id (uploads module).' })
+  @ApiPropertyOptional({
+    example: 7,
+    description: 'Illustration/video file id (uploads module).',
+  })
   @IsOptional()
   @IsInt()
   mediaFileId?: number;
@@ -119,4 +144,6 @@ export class CreateFirstAidGuideDto {
   isPublished?: boolean;
 }
 
-export class UpdateFirstAidGuideDto extends PartialType(CreateFirstAidGuideDto) {}
+export class UpdateFirstAidGuideDto extends PartialType(
+  CreateFirstAidGuideDto,
+) {}

@@ -70,7 +70,8 @@ export class EmergencyController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Close an emergency (resolved or false alarm)',
-    description: 'The patient may close their own event; circle members may close too.',
+    description:
+      'The patient may close their own event; circle members may close too.',
   })
   resolve(
     @CurrentUser() user: AuthenticatedUser,
@@ -83,7 +84,8 @@ export class EmergencyController {
   @Get('patients/:patientId')
   @ApiOperation({
     summary: "A patient's emergency history",
-    description: 'Access: the patient, treating doctor, or caregiver with RECEIVE_ALERTS.',
+    description:
+      'Access: the patient, treating doctor, or caregiver with RECEIVE_ALERTS.',
   })
   list(
     @CurrentUser() user: AuthenticatedUser,
@@ -102,7 +104,9 @@ export class EmergencyContactsController {
 
   @Get()
   @Roles(Role.PATIENT)
-  @ApiOperation({ summary: 'My emergency contacts (SMS recipients, by priority)' })
+  @ApiOperation({
+    summary: 'My emergency contacts (SMS recipients, by priority)',
+  })
   list(@CurrentUser() user: AuthenticatedUser) {
     return this.emergencyService.listContacts(user);
   }
@@ -111,7 +115,8 @@ export class EmergencyContactsController {
   @Roles(Role.PATIENT)
   @ApiOperation({
     summary: 'Add an emergency contact',
-    description: 'People who are NOT app users — they get SMS. Max 5. Platform caregivers are managed separately (Family Portal).',
+    description:
+      'People who are NOT app users — they get SMS. Max 5. Platform caregivers are managed separately (Family Portal).',
   })
   @ApiResponse({ status: 400, description: 'Contact limit reached.' })
   add(

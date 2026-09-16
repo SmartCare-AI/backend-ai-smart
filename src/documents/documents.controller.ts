@@ -41,8 +41,14 @@ export class DocumentsController {
     description:
       'Upload the file first via POST /uploads, then attach it here. FR-012: the uploader and upload date are recorded automatically.',
   })
-  @ApiResponse({ status: 201, description: 'The stored document with its file.' })
-  @ApiResponse({ status: 403, description: 'No access to this patient record.' })
+  @ApiResponse({
+    status: 201,
+    description: 'The stored document with its file.',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'No access to this patient record.',
+  })
   create(
     @CurrentUser() user: AuthenticatedUser,
     @Body() dto: CreateMedicalDocumentDto,

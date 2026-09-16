@@ -54,7 +54,8 @@ export class AnalyticsController {
   @Get('alert-quality')
   @ApiOperation({
     summary: 'Alert volume and mean time-to-resolution by severity',
-    description: 'Healthcare-quality indicator for the hospital dashboard (BRD §16.2).',
+    description:
+      'Healthcare-quality indicator for the hospital dashboard (BRD §16.2).',
   })
   @ApiQuery({ name: 'days', required: false, example: 30 })
   alertQuality(@Query() query: WindowQueryDto) {

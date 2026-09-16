@@ -1,10 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { RiskLevel } from '@prisma/client';
-import {
-  AiProvider,
-  TriageInput,
-  TriageResult,
-} from './ai-provider.interface';
+import { AiProvider, TriageInput, TriageResult } from './ai-provider.interface';
 
 /**
  * Built-in triage engine: explainable clinical rules, English + Arabic
@@ -20,23 +16,60 @@ import {
 const RED_FLAGS: { label: string; keywords: string[] }[] = [
   {
     label: 'Chest pain',
-    keywords: ['chest pain', 'chest tightness', 'pressure in chest', 'الم في الصدر', 'ألم في الصدر', 'ضيق في الصدر'],
+    keywords: [
+      'chest pain',
+      'chest tightness',
+      'pressure in chest',
+      'الم في الصدر',
+      'ألم في الصدر',
+      'ضيق في الصدر',
+    ],
   },
   {
     label: 'Difficulty breathing',
-    keywords: ['can\'t breathe', 'cannot breathe', 'shortness of breath', 'difficulty breathing', 'ضيق تنفس', 'ضيق في التنفس', 'صعوبة في التنفس'],
+    keywords: [
+      "can't breathe",
+      'cannot breathe',
+      'shortness of breath',
+      'difficulty breathing',
+      'ضيق تنفس',
+      'ضيق في التنفس',
+      'صعوبة في التنفس',
+    ],
   },
   {
     label: 'Severe bleeding',
-    keywords: ['severe bleeding', 'bleeding a lot', 'blood loss', 'نزيف شديد', 'نزيف حاد'],
+    keywords: [
+      'severe bleeding',
+      'bleeding a lot',
+      'blood loss',
+      'نزيف شديد',
+      'نزيف حاد',
+    ],
   },
   {
     label: 'Loss of consciousness',
-    keywords: ['unconscious', 'fainted', 'passed out', 'اغمي', 'أغمي', 'فقدان الوعي', 'إغماء'],
+    keywords: [
+      'unconscious',
+      'fainted',
+      'passed out',
+      'اغمي',
+      'أغمي',
+      'فقدان الوعي',
+      'إغماء',
+    ],
   },
   {
     label: 'Possible stroke',
-    keywords: ['face drooping', 'slurred speech', 'sudden numbness', 'numb on one side', 'تنميل مفاجئ', 'اعوجاج الوجه', 'تلعثم'],
+    keywords: [
+      'face drooping',
+      'slurred speech',
+      'sudden numbness',
+      'numb on one side',
+      'تنميل مفاجئ',
+      'اعوجاج الوجه',
+      'تلعثم',
+    ],
   },
   {
     label: 'Seizure',
@@ -44,34 +77,168 @@ const RED_FLAGS: { label: string; keywords: string[] }[] = [
   },
   {
     label: 'Coughing blood',
-    keywords: ['coughing blood', 'coughing up blood', 'vomiting blood', 'كحة بدم', 'قيء دم', 'سعال بدم'],
+    keywords: [
+      'coughing blood',
+      'coughing up blood',
+      'vomiting blood',
+      'كحة بدم',
+      'قيء دم',
+      'سعال بدم',
+    ],
   },
   {
     label: 'Severe allergic reaction',
-    keywords: ['anaphylaxis', 'throat swelling', 'swollen throat', 'severe allergic', 'حساسية شديدة', 'تورم الحلق'],
+    keywords: [
+      'anaphylaxis',
+      'throat swelling',
+      'swollen throat',
+      'severe allergic',
+      'حساسية شديدة',
+      'تورم الحلق',
+    ],
   },
   {
     label: 'Suicidal thoughts',
-    keywords: ['suicidal', 'want to die', 'kill myself', 'انتحار', 'اريد ان اموت', 'أريد أن أموت'],
+    keywords: [
+      'suicidal',
+      'want to die',
+      'kill myself',
+      'انتحار',
+      'اريد ان اموت',
+      'أريد أن أموت',
+    ],
   },
 ];
 
 /** First match wins — order roughly by specificity. */
 const SPECIALTY_RULES: { specialty: string; keywords: string[] }[] = [
-  { specialty: 'cardiology', keywords: ['chest', 'heart', 'palpitation', 'قلب', 'صدر', 'خفقان'] },
-  { specialty: 'pulmonology', keywords: ['breath', 'cough', 'wheez', 'asthma', 'تنفس', 'كحة', 'سعال', 'ربو'] },
-  { specialty: 'neurology', keywords: ['headache', 'migraine', 'dizz', 'numb', 'seizure', 'memory', 'صداع', 'دوخة', 'دوار', 'تنميل', 'شقيقة'] },
-  { specialty: 'gastroenterology', keywords: ['stomach', 'abdom', 'nausea', 'vomit', 'diarrhea', 'constipation', 'heartburn', 'معدة', 'بطن', 'غثيان', 'قيء', 'اسهال', 'إسهال', 'امساك', 'إمساك', 'حرقان'] },
-  { specialty: 'dermatology', keywords: ['rash', 'skin', 'itch', 'acne', 'eczema', 'جلد', 'طفح', 'حكة', 'حبوب'] },
-  { specialty: 'orthopedics', keywords: ['joint', 'knee', 'back pain', 'bone', 'fracture', 'shoulder', 'مفصل', 'ركبة', 'ظهر', 'عظم', 'كسر', 'كتف'] },
-  { specialty: 'urology', keywords: ['urin', 'kidney', 'bladder', 'بول', 'كلى', 'مثانة'] },
-  { specialty: 'ophthalmology', keywords: ['eye', 'vision', 'blurry', 'عين', 'نظر', 'رؤية'] },
-  { specialty: 'otolaryngology', keywords: ['ear', 'throat', 'sinus', 'nose', 'اذن', 'أذن', 'حلق', 'جيوب', 'انف', 'أنف'] },
-  { specialty: 'endocrinology', keywords: ['diabetes', 'thyroid', 'blood sugar', 'سكر', 'سكري', 'غدة'] },
-  { specialty: 'psychiatry', keywords: ['anxiety', 'depress', 'panic', 'قلق', 'اكتئاب', 'توتر'] },
+  {
+    specialty: 'cardiology',
+    keywords: ['chest', 'heart', 'palpitation', 'قلب', 'صدر', 'خفقان'],
+  },
+  {
+    specialty: 'pulmonology',
+    keywords: [
+      'breath',
+      'cough',
+      'wheez',
+      'asthma',
+      'تنفس',
+      'كحة',
+      'سعال',
+      'ربو',
+    ],
+  },
+  {
+    specialty: 'neurology',
+    keywords: [
+      'headache',
+      'migraine',
+      'dizz',
+      'numb',
+      'seizure',
+      'memory',
+      'صداع',
+      'دوخة',
+      'دوار',
+      'تنميل',
+      'شقيقة',
+    ],
+  },
+  {
+    specialty: 'gastroenterology',
+    keywords: [
+      'stomach',
+      'abdom',
+      'nausea',
+      'vomit',
+      'diarrhea',
+      'constipation',
+      'heartburn',
+      'معدة',
+      'بطن',
+      'غثيان',
+      'قيء',
+      'اسهال',
+      'إسهال',
+      'امساك',
+      'إمساك',
+      'حرقان',
+    ],
+  },
+  {
+    specialty: 'dermatology',
+    keywords: [
+      'rash',
+      'skin',
+      'itch',
+      'acne',
+      'eczema',
+      'جلد',
+      'طفح',
+      'حكة',
+      'حبوب',
+    ],
+  },
+  {
+    specialty: 'orthopedics',
+    keywords: [
+      'joint',
+      'knee',
+      'back pain',
+      'bone',
+      'fracture',
+      'shoulder',
+      'مفصل',
+      'ركبة',
+      'ظهر',
+      'عظم',
+      'كسر',
+      'كتف',
+    ],
+  },
+  {
+    specialty: 'urology',
+    keywords: ['urin', 'kidney', 'bladder', 'بول', 'كلى', 'مثانة'],
+  },
+  {
+    specialty: 'ophthalmology',
+    keywords: ['eye', 'vision', 'blurry', 'عين', 'نظر', 'رؤية'],
+  },
+  {
+    specialty: 'otolaryngology',
+    keywords: [
+      'ear',
+      'throat',
+      'sinus',
+      'nose',
+      'اذن',
+      'أذن',
+      'حلق',
+      'جيوب',
+      'انف',
+      'أنف',
+    ],
+  },
+  {
+    specialty: 'endocrinology',
+    keywords: ['diabetes', 'thyroid', 'blood sugar', 'سكر', 'سكري', 'غدة'],
+  },
+  {
+    specialty: 'psychiatry',
+    keywords: ['anxiety', 'depress', 'panic', 'قلق', 'اكتئاب', 'توتر'],
+  },
 ];
 
-const SEVERE_WORDS = ['severe', 'unbearable', 'worst', 'extreme', 'شديد', 'لا يحتمل', 'قوي جدا'];
+const SEVERE_WORDS = [
+  'severe',
+  'unbearable',
+  'worst',
+  'extreme',
+  'شديد',
+  'لا يحتمل',
+  'قوي جدا',
+];
 
 const RISK_ORDER: RiskLevel[] = [
   RiskLevel.LOW,
@@ -131,7 +298,9 @@ export class RulesAiProvider implements AiProvider {
     }
 
     if (reasons.length === 0) {
-      reasons.push('No red flags, severe descriptors, or risk factors matched.');
+      reasons.push(
+        'No red flags, severe descriptors, or risk factors matched.',
+      );
     }
 
     // 5. Specialty: first rule whose keyword appears; internal medicine

@@ -68,7 +68,8 @@ export class DevicesController {
   @Get('patients/:patientId')
   @ApiOperation({
     summary: "A patient's devices (doctor / caregiver monitoring view)",
-    description: 'Access: the patient, treating doctor, or caregiver with VIEW_RECORDS.',
+    description:
+      'Access: the patient, treating doctor, or caregiver with VIEW_RECORDS.',
   })
   listForPatient(
     @CurrentUser() user: AuthenticatedUser,

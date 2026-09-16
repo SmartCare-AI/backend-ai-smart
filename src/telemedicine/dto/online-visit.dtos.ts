@@ -1,6 +1,12 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { OnlineVisitStatus, OnlineVisitType } from '@prisma/client';
-import { IsEnum, IsInt, IsOptional, IsString, MaxLength } from 'class-validator';
+import {
+  IsEnum,
+  IsInt,
+  IsOptional,
+  IsString,
+  MaxLength,
+} from 'class-validator';
 import { PaginationDto } from '../../common/dto/pagination.dto';
 
 export class CreateOnlineVisitDto {
@@ -11,7 +17,10 @@ export class CreateOnlineVisitDto {
   @IsInt()
   appointmentId!: number;
 
-  @ApiPropertyOptional({ enum: OnlineVisitType, default: OnlineVisitType.VIDEO })
+  @ApiPropertyOptional({
+    enum: OnlineVisitType,
+    default: OnlineVisitType.VIDEO,
+  })
   @IsOptional()
   @IsEnum(OnlineVisitType)
   type?: OnlineVisitType;
@@ -33,7 +42,9 @@ export class CreateOnlineVisitDto {
 }
 
 export class EndOnlineVisitDto {
-  @ApiPropertyOptional({ example: 'Patient reports improvement; continue plan.' })
+  @ApiPropertyOptional({
+    example: 'Patient reports improvement; continue plan.',
+  })
   @IsOptional()
   @IsString()
   @MaxLength(2000)

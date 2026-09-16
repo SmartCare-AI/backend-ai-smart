@@ -65,7 +65,9 @@ export class TreatmentService {
     if (dto.diagnosisId) {
       const diagnosis = await this.prisma.diagnosis.findUnique({
         where: { id: dto.diagnosisId },
-        select: { visit: { select: { appointment: { select: { patientId: true } } } } },
+        select: {
+          visit: { select: { appointment: { select: { patientId: true } } } },
+        },
       });
       if (!diagnosis) throw new NotFoundException('Diagnosis not found.');
       if (diagnosis.visit.appointment.patientId !== dto.patientId) {
@@ -168,7 +170,9 @@ export class TreatmentService {
     });
     if (!plan) throw new NotFoundException('Treatment plan not found.');
     if (plan.doctorId !== doctor.id) {
-      throw new ForbiddenException('This treatment plan belongs to another doctor.');
+      throw new ForbiddenException(
+        'This treatment plan belongs to another doctor.',
+      );
     }
     if (plan.status !== TreatmentPlanStatus.ACTIVE) {
       throw new BadRequestException(
@@ -294,7 +298,9 @@ export class TreatmentService {
       ...(query.q
         ? {
             OR: [
-              { name: { contains: query.q, mode: Prisma.QueryMode.insensitive } },
+              {
+                name: { contains: query.q, mode: Prisma.QueryMode.insensitive },
+              },
               {
                 genericName: {
                   contains: query.q,

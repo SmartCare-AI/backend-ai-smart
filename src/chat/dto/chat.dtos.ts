@@ -49,7 +49,8 @@ export class SendMessageDto {
 export class GetMessagesDto {
   @ApiPropertyOptional({
     example: 120,
-    description: 'Return messages OLDER than this message id (infinite scroll).',
+    description:
+      'Return messages OLDER than this message id (infinite scroll).',
   })
   @IsOptional()
   @IsInt()

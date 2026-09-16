@@ -63,7 +63,9 @@ export class FirstAidController {
   @Post()
   @Roles(Role.ADMIN)
   @ApiBearerAuth('access-token')
-  @ApiOperation({ summary: 'Author a first-aid guide (admin, markdown content)' })
+  @ApiOperation({
+    summary: 'Author a first-aid guide (admin, markdown content)',
+  })
   @ApiResponse({ status: 409, description: 'Slug already exists.' })
   create(@Body() dto: CreateFirstAidGuideDto) {
     return this.firstAidService.create(dto);

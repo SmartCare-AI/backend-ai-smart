@@ -49,7 +49,8 @@ export class FirstAidService {
       where: { slug: dto.slug },
       select: { id: true },
     });
-    if (existing) throw new ConflictException('A guide with this slug already exists.');
+    if (existing)
+      throw new ConflictException('A guide with this slug already exists.');
     return this.prisma.firstAidGuide.create({ data: dto });
   }
 
@@ -61,7 +62,8 @@ export class FirstAidService {
         where: { slug: dto.slug },
         select: { id: true },
       });
-      if (clash) throw new ConflictException('A guide with this slug already exists.');
+      if (clash)
+        throw new ConflictException('A guide with this slug already exists.');
     }
     return this.prisma.firstAidGuide.update({ where: { id }, data: dto });
   }

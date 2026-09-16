@@ -1,10 +1,4 @@
-import {
-  Body,
-  Controller,
-  HttpCode,
-  HttpStatus,
-  Post,
-} from '@nestjs/common';
+import { Body, Controller, HttpCode, HttpStatus, Post } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiOperation,
@@ -48,7 +42,10 @@ export class AuthController {
       'Creates an account and emails a 6-digit verification code (valid 10 minutes). The account cannot log in until the email is verified via POST /auth/verify-email.',
   })
   @ApiResponse({ status: 201, type: MessageResponseDto })
-  @ApiResponse({ status: 409, description: 'Email already registered and verified.' })
+  @ApiResponse({
+    status: 409,
+    description: 'Email already registered and verified.',
+  })
   register(@Body() dto: RegisterDto) {
     return this.authService.register(dto);
   }
@@ -63,7 +60,10 @@ export class AuthController {
       'Confirms the code sent at registration. On success the account is activated and tokens are returned (auto-login).',
   })
   @ApiResponse({ status: 200, type: AuthResponseEntity })
-  @ApiResponse({ status: 400, description: 'Invalid, expired, or already-used code.' })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid, expired, or already-used code.',
+  })
   verifyEmail(@Body() dto: VerifyEmailDto) {
     return this.authService.verifyEmail(dto);
   }
@@ -93,7 +93,10 @@ export class AuthController {
   })
   @ApiResponse({ status: 200, type: AuthResponseEntity })
   @ApiResponse({ status: 401, description: 'Invalid credentials.' })
-  @ApiResponse({ status: 403, description: 'Email not verified or account deactivated.' })
+  @ApiResponse({
+    status: 403,
+    description: 'Email not verified or account deactivated.',
+  })
   login(@Body() dto: LoginDto, @SessionMeta() meta: SessionMeta) {
     return this.authService.login(dto, meta);
   }
@@ -108,9 +111,18 @@ export class AuthController {
       'The mobile app signs in with Google/Apple through Firebase Auth, then sends the Firebase ID token here. The server verifies it, creates or links the account, and returns SmartCare tokens. Social emails are treated as verified.',
   })
   @ApiResponse({ status: 200, type: AuthResponseEntity })
-  @ApiResponse({ status: 401, description: 'Invalid or expired Firebase ID token.' })
-  @ApiResponse({ status: 503, description: 'Firebase is not configured on the server.' })
-  firebaseLogin(@Body() dto: FirebaseLoginDto, @SessionMeta() meta: SessionMeta) {
+  @ApiResponse({
+    status: 401,
+    description: 'Invalid or expired Firebase ID token.',
+  })
+  @ApiResponse({
+    status: 503,
+    description: 'Firebase is not configured on the server.',
+  })
+  firebaseLogin(
+    @Body() dto: FirebaseLoginDto,
+    @SessionMeta() meta: SessionMeta,
+  ) {
     return this.authService.firebaseLogin(dto, meta);
   }
 
@@ -124,7 +136,10 @@ export class AuthController {
       'Exchanges a valid refresh token for a new access + refresh pair. Refresh tokens are single-use (rotation): the submitted token is revoked.',
   })
   @ApiResponse({ status: 200, type: AuthResponseEntity })
-  @ApiResponse({ status: 401, description: 'Invalid, expired, or already-used refresh token.' })
+  @ApiResponse({
+    status: 401,
+    description: 'Invalid, expired, or already-used refresh token.',
+  })
   refresh(@Body() dto: RefreshTokenDto, @SessionMeta() meta: SessionMeta) {
     return this.authService.refreshTokens(dto.refreshToken, meta);
   }
@@ -138,10 +153,7 @@ export class AuthController {
       'Revokes the given refresh token for the authenticated user. The access token stays valid until it expires (max 15 min).',
   })
   @ApiResponse({ status: 200, type: MessageResponseDto })
-  logout(
-    @CurrentUser() user: AuthenticatedUser,
-    @Body() dto: RefreshTokenDto,
-  ) {
+  logout(@CurrentUser() user: AuthenticatedUser, @Body() dto: RefreshTokenDto) {
     return this.authService.logout(user.id, dto.refreshToken);
   }
 
@@ -169,7 +181,10 @@ export class AuthController {
       'Sets a new password and revokes every active session (all refresh tokens) for security.',
   })
   @ApiResponse({ status: 200, type: MessageResponseDto })
-  @ApiResponse({ status: 400, description: 'Invalid, expired, or already-used code.' })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid, expired, or already-used code.',
+  })
   resetPassword(@Body() dto: ResetPasswordDto) {
     return this.authService.resetPassword(dto);
   }

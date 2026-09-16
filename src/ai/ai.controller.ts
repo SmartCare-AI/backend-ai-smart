@@ -47,7 +47,10 @@ export class AiController {
         suggestedSpecialty: 'neurology',
         seekEmergencyCare: false,
         redFlags: [],
-        reasons: ['2 symptoms reported at once.', 'Chronic conditions on record.'],
+        reasons: [
+          '2 symptoms reported at once.',
+          'Chronic conditions on record.',
+        ],
         advice:
           'Your answers suggest the neurology department. This is an assistive assessment, not a diagnosis — a doctor will evaluate you.',
         engine: 'rules',
@@ -56,7 +59,10 @@ export class AiController {
       },
     },
   })
-  triage(@CurrentUser() user: AuthenticatedUser, @Body() dto: TriageRequestDto) {
+  triage(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: TriageRequestDto,
+  ) {
     return this.aiService.triage(user, dto);
   }
 

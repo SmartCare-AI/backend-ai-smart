@@ -22,7 +22,9 @@ export class R2StorageProvider implements StorageProvider {
   constructor(config: ConfigService) {
     const accountId = config.getOrThrow<string>('R2_ACCOUNT_ID');
     this.bucket = config.getOrThrow<string>('R2_BUCKET');
-    this.publicBaseUrl = config.get<string>('R2_PUBLIC_URL')?.replace(/\/$/, '');
+    this.publicBaseUrl = config
+      .get<string>('R2_PUBLIC_URL')
+      ?.replace(/\/$/, '');
     this.client = new S3Client({
       region: 'auto',
       endpoint: `https://${accountId}.r2.cloudflarestorage.com`,

@@ -171,7 +171,10 @@ export class MedicationsController {
     @CurrentUser() user: AuthenticatedUser,
     @Query('hours') hours?: string,
   ) {
-    const window = Math.min(Math.max(parseInt(hours ?? '24', 10) || 24, 1), 168);
+    const window = Math.min(
+      Math.max(parseInt(hours ?? '24', 10) || 24, 1),
+      168,
+    );
     return this.treatmentService.upcomingDoses(user, window);
   }
 
@@ -179,7 +182,10 @@ export class MedicationsController {
   @Roles(Role.PATIENT)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Mark a dose as taken' })
-  @ApiResponse({ status: 400, description: 'Dose already taken/missed/skipped.' })
+  @ApiResponse({
+    status: 400,
+    description: 'Dose already taken/missed/skipped.',
+  })
   take(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id', ParseIntPipe) id: number,

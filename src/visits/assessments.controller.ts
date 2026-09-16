@@ -42,7 +42,8 @@ export class AssessmentsController {
   @Get('patients/:patientId')
   @ApiOperation({
     summary: "A patient's assessment history",
-    description: 'Access: the patient, treating doctor, or caregiver with VIEW_RECORDS.',
+    description:
+      'Access: the patient, treating doctor, or caregiver with VIEW_RECORDS.',
   })
   list(
     @CurrentUser() user: AuthenticatedUser,

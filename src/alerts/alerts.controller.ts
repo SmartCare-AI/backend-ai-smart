@@ -65,7 +65,8 @@ export class AlertsController {
   @Get('patients/:patientId')
   @ApiOperation({
     summary: "A patient's alert history",
-    description: 'Access: the patient, treating doctor, or caregiver with RECEIVE_ALERTS.',
+    description:
+      'Access: the patient, treating doctor, or caregiver with RECEIVE_ALERTS.',
   })
   listForPatient(
     @CurrentUser() user: AuthenticatedUser,
@@ -84,8 +85,13 @@ export class AlertsController {
   @Patch(':id/status')
   @Roles(Role.DOCTOR)
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Acknowledge / resolve / dismiss an alert (treating doctor)' })
-  @ApiResponse({ status: 403, description: 'Not a treating doctor for this patient.' })
+  @ApiOperation({
+    summary: 'Acknowledge / resolve / dismiss an alert (treating doctor)',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Not a treating doctor for this patient.',
+  })
   updateStatus(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id', ParseIntPipe) id: number,

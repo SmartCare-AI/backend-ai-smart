@@ -84,7 +84,10 @@ export class UpdateProfileDto {
   @MaxLength(30)
   emergencyPhone?: string;
 
-  @ApiPropertyOptional({ example: 'Type 2 diabetes', description: 'PATIENT only.' })
+  @ApiPropertyOptional({
+    example: 'Type 2 diabetes',
+    description: 'PATIENT only.',
+  })
   @IsOptional()
   @IsString()
   @MaxLength(2000)

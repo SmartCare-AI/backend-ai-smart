@@ -85,7 +85,8 @@ export class TelemedicineController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Start the session (doctor)',
-    description: 'Marks it ACTIVE and pushes a "join now" notification to the patient.',
+    description:
+      'Marks it ACTIVE and pushes a "join now" notification to the patient.',
   })
   start(
     @CurrentUser() user: AuthenticatedUser,
@@ -99,7 +100,8 @@ export class TelemedicineController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'End the session (doctor)',
-    description: 'Records EndTime, stores session notes, and completes the appointment.',
+    description:
+      'Records EndTime, stores session notes, and completes the appointment.',
   })
   end(
     @CurrentUser() user: AuthenticatedUser,

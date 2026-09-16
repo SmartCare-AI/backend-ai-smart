@@ -104,7 +104,9 @@ export class AuthService {
   async verifyEmail(dto: VerifyEmailDto): Promise<AuthResponseEntity> {
     const user = await this.findUserByEmailOrThrow(dto.email);
     if (user.isEmailVerified) {
-      throw new BadRequestException('Email is already verified. Please log in.');
+      throw new BadRequestException(
+        'Email is already verified. Please log in.',
+      );
     }
 
     await this.consumeOtp(user.id, OtpType.EMAIL_VERIFICATION, dto.code);

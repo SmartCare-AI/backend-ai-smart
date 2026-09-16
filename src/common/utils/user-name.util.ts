@@ -32,7 +32,9 @@ export const USER_NAME_INCLUDE = {
 
 /** The populated profile's name pair, or null for profile-less accounts. */
 export function profileName(user: UserWithProfileNames): ProfileName | null {
-  return user.patientProfile ?? user.doctorProfile ?? user.caregiverProfile ?? null;
+  return (
+    user.patientProfile ?? user.doctorProfile ?? user.caregiverProfile ?? null
+  );
 }
 
 /** "Omar Youssef" — falls back to the email local part, then "User". */

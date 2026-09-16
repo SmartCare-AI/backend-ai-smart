@@ -88,7 +88,10 @@ async function bootstrap() {
       'x-platform',
     )
     .addTag('Health', 'Service liveness')
-    .addTag('Auth', 'Registration, login, email verification, password reset, social sign-in')
+    .addTag(
+      'Auth',
+      'Registration, login, email verification, password reset, social sign-in',
+    )
     .addTag('Users', 'Profile management')
     .addTag('Hospitals', 'Hospitals & departments (admin-managed)')
     .addTag('Appointments', 'Booking, confirmation, doctor schedules')
@@ -96,8 +99,14 @@ async function bootstrap() {
     .addTag('Assessments', 'Symptom self-reports & doctor evaluations')
     .addTag('Treatment', 'Plans, prescriptions, medication doses, adherence')
     .addTag('Vitals', 'Vital-sign time-series with clinical threshold alerts')
-    .addTag('AI', 'Assistive triage & risk snapshots — explainable, never diagnostic')
-    .addTag('Analytics', 'Hospital dashboard aggregates (HOSPITAL_ADMIN / ADMIN)')
+    .addTag(
+      'AI',
+      'Assistive triage & risk snapshots — explainable, never diagnostic',
+    )
+    .addTag(
+      'Analytics',
+      'Hospital dashboard aggregates (HOSPITAL_ADMIN / ADMIN)',
+    )
     .addTag('Alerts', 'Smart Alert Center — abnormal patterns & adherence')
     .addTag('Emergency', 'SOS, escalation chain, emergency contacts')
     .addTag('First Aid', 'Offline-cacheable first-aid guides (public)')

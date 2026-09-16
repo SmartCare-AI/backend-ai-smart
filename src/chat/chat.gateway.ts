@@ -210,7 +210,9 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
 
     const callType = body.callType === 'audio' ? 'audio' : 'video';
-    client.to(this.room(chatId)).emit('call:invite', { from: userId, chatId, callType });
+    client
+      .to(this.room(chatId))
+      .emit('call:invite', { from: userId, chatId, callType });
 
     // Ring offline participants via push so the phone wakes up.
     const caller = await this.prisma.user.findUnique({
@@ -230,17 +232,26 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   @SubscribeMessage('call:accept')
-  onCallAccept(@ConnectedSocket() client: Socket, @MessageBody() body: { chatId?: number }) {
+  onCallAccept(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() body: { chatId?: number },
+  ) {
     this.relay(client, body?.chatId, 'call:accept', {});
   }
 
   @SubscribeMessage('call:decline')
-  onCallDecline(@ConnectedSocket() client: Socket, @MessageBody() body: { chatId?: number }) {
+  onCallDecline(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() body: { chatId?: number },
+  ) {
     this.relay(client, body?.chatId, 'call:decline', {});
   }
 
   @SubscribeMessage('call:end')
-  onCallEnd(@ConnectedSocket() client: Socket, @MessageBody() body: { chatId?: number }) {
+  onCallEnd(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() body: { chatId?: number },
+  ) {
     this.relay(client, body?.chatId, 'call:end', {});
   }
 
@@ -285,7 +296,12 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   // -------------------------------------------------------------------------
 
-  private relay(client: Socket, rawChatId: unknown, event: string, payload: Record<string, unknown>) {
+  private relay(
+    client: Socket,
+    rawChatId: unknown,
+    event: string,
+    payload: Record<string, unknown>,
+  ) {
     const chatId = Number(rawChatId);
     // Membership was proven at chat:join — only joined sockets can relay.
     if (!chatId || !client.rooms.has(this.room(chatId))) return;

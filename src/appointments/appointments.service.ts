@@ -58,7 +58,11 @@ export class AppointmentsService {
       where: { id: dto.doctorId },
       select: { id: true, userId: true, isVerified: true, status: true },
     });
-    if (!doctor || !doctor.isVerified || doctor.status !== ProfileStatus.ACTIVE) {
+    if (
+      !doctor ||
+      !doctor.isVerified ||
+      doctor.status !== ProfileStatus.ACTIVE
+    ) {
       throw new NotFoundException('Doctor not found or not available.');
     }
 
@@ -224,7 +228,9 @@ export class AppointmentsService {
     if (requester.role === Role.DOCTOR) {
       const doctor = await this.profiles.getDoctorByUserId(requester.id);
       if (appointment.doctorId !== doctor.id) {
-        throw new ForbiddenException('This appointment is not yours to cancel.');
+        throw new ForbiddenException(
+          'This appointment is not yours to cancel.',
+        );
       }
     } else {
       await this.consent.assertCanAccessPatient(

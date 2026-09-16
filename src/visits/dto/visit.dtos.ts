@@ -211,7 +211,10 @@ export class CreateTestResultDto {
   @MaxLength(1000)
   interpretation?: string;
 
-  @ApiPropertyOptional({ example: 3, description: 'Uploaded lab report file id.' })
+  @ApiPropertyOptional({
+    example: 3,
+    description: 'Uploaded lab report file id.',
+  })
   @IsOptional()
   @IsInt()
   fileId?: number;

@@ -6,10 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { DoctorProfile, PatientProfile, Role } from '@prisma/client';
-import {
-  displayName,
-  USER_NAME_INCLUDE,
-} from '../common/utils/user-name.util';
+import { displayName, USER_NAME_INCLUDE } from '../common/utils/user-name.util';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateDoctorProfileDto } from './dto/create-doctor-profile.dto';
 import { UserEntity } from './entities/user.entity';

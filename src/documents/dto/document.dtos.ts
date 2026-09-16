@@ -38,7 +38,9 @@ export class CreateMedicalDocumentDto {
   @IsEnum(DocumentType)
   type?: DocumentType;
 
-  @ApiPropertyOptional({ example: 'Issued by SHIFAA Hospital cardiology ward.' })
+  @ApiPropertyOptional({
+    example: 'Issued by SHIFAA Hospital cardiology ward.',
+  })
   @IsOptional()
   @IsString()
   @MaxLength(1000)

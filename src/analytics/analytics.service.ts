@@ -52,7 +52,9 @@ export class AnalyticsService {
       }),
       this.prisma.visit.count({ where: { date: { gte: since } } }),
       this.prisma.onlineVisit.count({ where: { startTime: { gte: since } } }),
-      this.prisma.alert.count({ where: { status: { in: OPEN_ALERT_STATUSES } } }),
+      this.prisma.alert.count({
+        where: { status: { in: OPEN_ALERT_STATUSES } },
+      }),
       this.prisma.emergencyEvent.count({
         where: { status: EmergencyStatus.ACTIVE },
       }),
@@ -123,7 +125,9 @@ export class AnalyticsService {
     const appointmentCounts = new Map(
       appointments.map((g) => [g.doctorId, g._count._all]),
     );
-    const visitCounts = new Map(realized.map((g) => [g.doctorId, g._count._all]));
+    const visitCounts = new Map(
+      realized.map((g) => [g.doctorId, g._count._all]),
+    );
 
     return {
       windowDays: days,

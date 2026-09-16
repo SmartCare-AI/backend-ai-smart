@@ -290,10 +290,7 @@ export class DevicesService {
     }
   }
 
-  private async getOwnedDevice(
-    requester: AuthenticatedUser,
-    deviceId: number,
-  ) {
+  private async getOwnedDevice(requester: AuthenticatedUser, deviceId: number) {
     const patient = await this.profiles.getPatientByUserId(requester.id);
     const device = await this.prisma.device.findUnique({
       where: { id: deviceId },
