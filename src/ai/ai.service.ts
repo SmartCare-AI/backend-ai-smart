@@ -36,15 +36,16 @@ export class AiService {
     const patient = await this.profiles.getPatientByUserId(requester.id);
 
     // Data minimization: the engine gets clinical context only — no names,
-    // emails, or ids leave this service.
+    // emails, or ids leave this service. Demographics come from the patient
+    // profile, which is where the ERD puts them.
     const input: TriageInput = {
-      age: requester.dateOfBirth
+      age: patient.dateOfBirth
         ? Math.floor(
-            (Date.now() - requester.dateOfBirth.getTime()) /
+            (Date.now() - patient.dateOfBirth.getTime()) /
               (365.25 * 24 * 60 * 60 * 1000),
           )
         : null,
-      gender: requester.gender ?? null,
+      gender: patient.gender ?? null,
       chronicDiseases: patient.chronicDiseases,
       symptoms: dto.symptoms,
       notes: dto.notes ?? null,
@@ -62,7 +63,7 @@ export class AiService {
         notes: dto.notes ?? null,
         observations: result.reasons.join(' '),
       },
-      select: { id: true, createdAt: true },
+      select: { id: true, date: true },
     });
 
     return {
@@ -94,7 +95,10 @@ export class AiService {
           take: 200,
         }),
         this.prisma.alert.findMany({
-          where: { patientId, status: AlertStatus.ACTIVE },
+          where: {
+            patientId,
+            status: { in: [AlertStatus.NEW, AlertStatus.ACKNOWLEDGED] },
+          },
           select: { title: true, severity: true },
         }),
         this.prisma.emergencyEvent.count({

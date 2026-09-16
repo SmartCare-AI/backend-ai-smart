@@ -2,13 +2,21 @@ import { Injectable } from '@nestjs/common';
 import {
   AlertStatus,
   EmergencyStatus,
-  MedicationDoseStatus,
+  EntityStatus,
+  MedicineTrackingStatus,
   Role,
 } from '@prisma/client';
+import { fullName } from '../common/utils/user-name.util';
 import { PrismaService } from '../prisma/prisma.service';
 
+/** Alerts that still need attention (ERD Alert.Status New / Acknowledged). */
+const OPEN_ALERT_STATUSES: AlertStatus[] = [
+  AlertStatus.NEW,
+  AlertStatus.ACKNOWLEDGED,
+];
+
 /**
- * Phase G — read-only aggregates for the hospital dashboard.
+ * BRD §16.2 — read-only aggregates for the hospital dashboard.
  * Pure Prisma groupBy/count queries; no state, no writes, no PII
  * (aggregates + doctor display names only).
  */
@@ -29,7 +37,8 @@ export class AnalyticsService {
       caregivers,
       appointmentsByStatus,
       visits,
-      activeAlerts,
+      onlineVisits,
+      openAlerts,
       activeEmergencies,
       doseCounts,
     ] = await Promise.all([
@@ -42,20 +51,21 @@ export class AnalyticsService {
         _count: { _all: true },
       }),
       this.prisma.visit.count({ where: { date: { gte: since } } }),
-      this.prisma.alert.count({ where: { status: AlertStatus.ACTIVE } }),
+      this.prisma.onlineVisit.count({ where: { startTime: { gte: since } } }),
+      this.prisma.alert.count({ where: { status: { in: OPEN_ALERT_STATUSES } } }),
       this.prisma.emergencyEvent.count({
         where: { status: EmergencyStatus.ACTIVE },
       }),
-      this.prisma.medicationDose.groupBy({
+      this.prisma.medicineTracking.groupBy({
         by: ['status'],
-        where: { scheduledAt: { gte: since, lte: new Date() } },
+        where: { scheduledTime: { gte: since, lte: new Date() } },
         _count: { _all: true },
       }),
     ]);
 
     const doses = Object.fromEntries(
       doseCounts.map((g) => [g.status, g._count._all]),
-    ) as Partial<Record<MedicationDoseStatus, number>>;
+    ) as Partial<Record<MedicineTrackingStatus, number>>;
     const taken = doses.TAKEN ?? 0;
     const missed = doses.MISSED ?? 0;
 
@@ -66,7 +76,8 @@ export class AnalyticsService {
         appointmentsByStatus.map((g) => [g.status, g._count._all]),
       ),
       visits,
-      activeAlerts,
+      onlineVisits,
+      openAlerts,
       activeEmergencies,
       adherence: {
         taken,
@@ -79,27 +90,32 @@ export class AnalyticsService {
     };
   }
 
-  /** Appointments + visits per doctor — who is overloaded, who is idle. */
+  /**
+   * Appointments + visits per doctor — who is overloaded, who is idle.
+   * Visits are counted through their appointment (BR-004), since the Visit
+   * entity no longer duplicates the doctor.
+   */
   async doctorLoad(days: number) {
     const since = this.windowStart(days);
-    const [appointments, visits, doctors] = await Promise.all([
+    const [appointments, realized, doctors] = await Promise.all([
       this.prisma.appointment.groupBy({
         by: ['doctorId'],
-        where: { scheduledAt: { gte: since } },
+        where: { startTime: { gte: since } },
         _count: { _all: true },
       }),
-      this.prisma.visit.groupBy({
+      this.prisma.appointment.groupBy({
         by: ['doctorId'],
-        where: { date: { gte: since } },
+        where: { visit: { is: { date: { gte: since } } } },
         _count: { _all: true },
       }),
       this.prisma.doctorProfile.findMany({
         select: {
           id: true,
+          firstName: true,
+          lastName: true,
           specialization: true,
           department: { select: { name: true } },
           hospital: { select: { name: true } },
-          user: { select: { firstName: true, lastName: true } },
         },
       }),
     ]);
@@ -107,14 +123,14 @@ export class AnalyticsService {
     const appointmentCounts = new Map(
       appointments.map((g) => [g.doctorId, g._count._all]),
     );
-    const visitCounts = new Map(visits.map((g) => [g.doctorId, g._count._all]));
+    const visitCounts = new Map(realized.map((g) => [g.doctorId, g._count._all]));
 
     return {
       windowDays: days,
       doctors: doctors
         .map((d) => ({
           doctorId: d.id,
-          name: `${d.user.firstName} ${d.user.lastName}`.trim(),
+          name: fullName(d),
           specialization: d.specialization,
           department: d.department?.name ?? null,
           hospital: d.hospital?.name ?? null,
@@ -126,31 +142,34 @@ export class AnalyticsService {
   }
 
   /**
-   * Medication adherence per department (via prescribing doctor).
-   * Departments are few, so one groupBy per department is fine.
+   * Medication adherence per department, attributed through the prescribing
+   * doctor: MedicineTracking → PrescriptionItem → Prescription → TreatmentPlan
+   * → Doctor → Department. Departments are few, so one groupBy each is fine.
    */
   async adherenceByDepartment(days: number) {
     const since = this.windowStart(days);
     const departments = await this.prisma.department.findMany({
-      where: { isActive: true },
+      where: { status: EntityStatus.ACTIVE },
       select: { id: true, name: true, hospital: { select: { name: true } } },
     });
 
     const rows = await Promise.all(
       departments.map(async (dept) => {
-        const grouped = await this.prisma.medicationDose.groupBy({
+        const grouped = await this.prisma.medicineTracking.groupBy({
           by: ['status'],
           where: {
-            scheduledAt: { gte: since, lte: new Date() },
+            scheduledTime: { gte: since, lte: new Date() },
             prescriptionItem: {
-              prescription: { doctor: { departmentId: dept.id } },
+              prescription: {
+                treatmentPlan: { doctor: { departmentId: dept.id } },
+              },
             },
           },
           _count: { _all: true },
         });
         const counts = Object.fromEntries(
           grouped.map((g) => [g.status, g._count._all]),
-        ) as Partial<Record<MedicationDoseStatus, number>>;
+        ) as Partial<Record<MedicineTrackingStatus, number>>;
         const taken = counts.TAKEN ?? 0;
         const missed = counts.MISSED ?? 0;
         return {
@@ -178,15 +197,16 @@ export class AnalyticsService {
     const since = this.windowStart(days);
     const visits = await this.prisma.visit.findMany({
       where: { date: { gte: since } },
-      select: { patientId: true, date: true },
+      select: { date: true, appointment: { select: { patientId: true } } },
       orderBy: { date: 'asc' },
     });
 
     const byPatient = new Map<number, Date[]>();
     for (const visit of visits) {
-      const list = byPatient.get(visit.patientId) ?? [];
+      const patientId = visit.appointment.patientId;
+      const list = byPatient.get(patientId) ?? [];
       list.push(visit.date);
-      byPatient.set(visit.patientId, list);
+      byPatient.set(patientId, list);
     }
 
     const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
@@ -209,6 +229,57 @@ export class AnalyticsService {
         patientsSeen > 0
           ? Math.round((readmitted / patientsSeen) * 100) / 100
           : null,
+    };
+  }
+
+  /**
+   * BRD §16.2 "healthcare quality analytics": alert volume and how quickly
+   * the care team closes alerts, split by severity.
+   */
+  async alertQuality(days: number) {
+    const since = this.windowStart(days);
+    const [bySeverity, resolved] = await Promise.all([
+      this.prisma.alert.groupBy({
+        by: ['severity', 'status'],
+        where: { createdAt: { gte: since } },
+        _count: { _all: true },
+      }),
+      this.prisma.alert.findMany({
+        where: {
+          createdAt: { gte: since },
+          resolvedAt: { not: null },
+        },
+        select: { severity: true, createdAt: true, resolvedAt: true },
+      }),
+    ]);
+
+    const minutesBySeverity = new Map<string, number[]>();
+    for (const alert of resolved) {
+      if (!alert.resolvedAt) continue;
+      const minutes =
+        (alert.resolvedAt.getTime() - alert.createdAt.getTime()) / 60_000;
+      const list = minutesBySeverity.get(alert.severity) ?? [];
+      list.push(minutes);
+      minutesBySeverity.set(alert.severity, list);
+    }
+
+    return {
+      windowDays: days,
+      counts: bySeverity.map((g) => ({
+        severity: g.severity,
+        status: g.status,
+        count: g._count._all,
+      })),
+      meanResolutionMinutes: [...minutesBySeverity.entries()].map(
+        ([severity, values]) => ({
+          severity,
+          resolved: values.length,
+          meanMinutes:
+            Math.round(
+              (values.reduce((a, b) => a + b, 0) / values.length) * 10,
+            ) / 10,
+        }),
+      ),
     };
   }
 }

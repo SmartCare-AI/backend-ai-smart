@@ -23,7 +23,8 @@ export class AnalyticsController {
 
   @Get('overview')
   @ApiOperation({
-    summary: 'Headline numbers: users, appointments, visits, alerts, adherence',
+    summary:
+      'Headline numbers: users, appointments, visits, online visits, alerts, adherence',
   })
   @ApiQuery({ name: 'days', required: false, example: 30 })
   overview(@Query() query: WindowQueryDto) {
@@ -48,6 +49,16 @@ export class AnalyticsController {
   @ApiQuery({ name: 'days', required: false, example: 30 })
   adherenceByDepartment(@Query() query: WindowQueryDto) {
     return this.analyticsService.adherenceByDepartment(query.days);
+  }
+
+  @Get('alert-quality')
+  @ApiOperation({
+    summary: 'Alert volume and mean time-to-resolution by severity',
+    description: 'Healthcare-quality indicator for the hospital dashboard (BRD §16.2).',
+  })
+  @ApiQuery({ name: 'days', required: false, example: 30 })
+  alertQuality(@Query() query: WindowQueryDto) {
+    return this.analyticsService.alertQuality(query.days);
   }
 
   @Get('readmissions')
