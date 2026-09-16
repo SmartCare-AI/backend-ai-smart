@@ -101,6 +101,19 @@ export class NotificationsController {
     return this.notificationsService.markRead(user.id, id);
   }
 
+  @Patch(':id/archive')
+  @ApiOperation({
+    summary: 'Archive one notification',
+    description: 'ERD Notification.Status ARCHIVED — removes it from the unread badge.',
+  })
+  @ApiResponse({ status: 200, type: NotificationEntity })
+  archive(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return this.notificationsService.archive(user.id, id);
+  }
+
   @Patch('read-all')
   @ApiOperation({ summary: 'Mark all my notifications as read' })
   @ApiResponse({ status: 200, type: MessageResponseDto })

@@ -1,6 +1,11 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { Notification, NotificationType } from '@prisma/client';
+import {
+  Notification,
+  NotificationStatus,
+  NotificationType,
+} from '@prisma/client';
 
+/** ERD #25 Notification. */
 export class NotificationEntity {
   @ApiProperty({ example: 1 })
   id!: number;
@@ -12,7 +17,13 @@ export class NotificationEntity {
   title!: string;
 
   @ApiProperty({ example: 'Time to take Panadol 500mg.' })
-  body!: string;
+  message!: string;
+
+  @ApiProperty({
+    enum: NotificationStatus,
+    example: NotificationStatus.UNREAD,
+  })
+  status!: NotificationStatus;
 
   @ApiPropertyOptional({
     example: '{"screen":"medications","id":"12"}',
@@ -24,7 +35,7 @@ export class NotificationEntity {
   @ApiPropertyOptional({ example: null, nullable: true })
   readAt!: Date | null;
 
-  @ApiProperty({ example: '2026-08-20T10:15:00.000Z' })
+  @ApiProperty({ example: '2026-09-16T10:15:00.000Z' })
   createdAt!: Date;
 
   static fromNotification(n: Notification): NotificationEntity {

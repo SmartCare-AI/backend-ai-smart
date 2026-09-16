@@ -4,7 +4,11 @@ import {
   NotFoundException,
   OnModuleInit,
 } from '@nestjs/common';
-import { DevicePlatform, NotificationType } from '@prisma/client';
+import {
+  DevicePlatform,
+  NotificationStatus,
+  NotificationType,
+} from '@prisma/client';
 import type { Job } from 'bullmq';
 import { PrismaService } from '../prisma/prisma.service';
 import { QUEUES, QueueService } from '../queues/queue.service';
@@ -14,16 +18,18 @@ import { PushService } from './push.service';
 export interface NotifyInput {
   type: NotificationType;
   title: string;
-  body: string;
+  /** ERD Notification.Message — the delivered content. */
+  message: string;
   /** Deep-link payload for the app */
   data?: Record<string, string>;
+  /** BR-010: set when this notification originates from an Alert. */
   alertId?: number;
 }
 
 interface DispatchJob {
   userId: number;
   title: string;
-  body: string;
+  message: string;
   data?: Record<string, string>;
 }
 
@@ -61,7 +67,7 @@ export class NotificationsService implements OnModuleInit {
         userId,
         type: input.type,
         title: input.title,
-        body: input.body,
+        message: input.message,
         data: input.data ? JSON.stringify(input.data) : null,
         alertId: input.alertId ?? null,
       },
@@ -70,7 +76,7 @@ export class NotificationsService implements OnModuleInit {
     const job: DispatchJob = {
       userId,
       title: input.title,
-      body: input.body,
+      message: input.message,
       data: input.data,
     };
     const queued = await this.queues.add(QUEUES.NOTIFICATIONS, 'dispatch', job);
@@ -113,7 +119,10 @@ export class NotificationsService implements OnModuleInit {
   // -------------------------------------------------------------------------
 
   async list(userId: number, page: number, limit: number, unread: boolean) {
-    const where = { userId, ...(unread ? { readAt: null } : {}) };
+    const where = {
+      userId,
+      ...(unread ? { status: NotificationStatus.UNREAD } : {}),
+    };
     const [items, total] = await this.prisma.$transaction([
       this.prisma.notification.findMany({
         where,
@@ -133,7 +142,7 @@ export class NotificationsService implements OnModuleInit {
 
   async unreadCount(userId: number): Promise<{ count: number }> {
     const count = await this.prisma.notification.count({
-      where: { userId, readAt: null },
+      where: { userId, status: NotificationStatus.UNREAD },
     });
     return { count };
   }
@@ -145,17 +154,36 @@ export class NotificationsService implements OnModuleInit {
     if (!notification) throw new NotFoundException('Notification not found.');
     const updated = await this.prisma.notification.update({
       where: { id },
-      data: { readAt: notification.readAt ?? new Date() },
+      data: {
+        readAt: notification.readAt ?? new Date(),
+        status: NotificationStatus.READ,
+      },
     });
     return NotificationEntity.fromNotification(updated);
   }
 
   async markAllRead(userId: number): Promise<{ message: string }> {
     await this.prisma.notification.updateMany({
-      where: { userId, readAt: null },
-      data: { readAt: new Date() },
+      where: { userId, status: NotificationStatus.UNREAD },
+      data: { readAt: new Date(), status: NotificationStatus.READ },
     });
     return { message: 'All notifications marked as read.' };
+  }
+
+  /** ERD Notification.Status ARCHIVED — hides it from the feed badge. */
+  async archive(userId: number, id: number): Promise<NotificationEntity> {
+    const notification = await this.prisma.notification.findFirst({
+      where: { id, userId },
+    });
+    if (!notification) throw new NotFoundException('Notification not found.');
+    const updated = await this.prisma.notification.update({
+      where: { id },
+      data: {
+        status: NotificationStatus.ARCHIVED,
+        readAt: notification.readAt ?? new Date(),
+      },
+    });
+    return NotificationEntity.fromNotification(updated);
   }
 
   // -------------------------------------------------------------------------
@@ -169,7 +197,7 @@ export class NotificationsService implements OnModuleInit {
 
     const result = await this.push.sendToTokens(
       tokens.map((t) => t.token),
-      { title: job.title, body: job.body, data: job.data },
+      { title: job.title, body: job.message, data: job.data },
     );
 
     // Housekeeping: tokens FCM declared dead get revoked so we stop
