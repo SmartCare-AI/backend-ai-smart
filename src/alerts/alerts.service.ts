@@ -7,12 +7,16 @@ import {
 import {
   Alert,
   AlertStatus,
+  AlertType,
   ConsentType,
   EmergencyType,
   NotificationType,
+  Prisma,
   RiskLevel,
+  Role,
 } from '@prisma/client';
 import type { AuthenticatedUser } from '../common/decorators/current-user.decorator';
+import { fullName } from '../common/utils/user-name.util';
 import { ConsentService } from '../consent/consent.service';
 import { EmergencyService } from '../emergency/emergency.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -21,15 +25,18 @@ import { ProfilesService } from '../users/profiles.service';
 
 export interface RaiseAlertInput {
   patientId: number;
+  /** ERD Alert.Type — the alert classification. */
+  type: AlertType;
   title: string;
+  /** ERD Alert.Description is mandatory; defaults to the title when omitted. */
   description?: string;
   severity: RiskLevel;
-  /** What produced it: "vital_threshold" | "adherence" | "ai_anomaly" */
+  /** Dedupe key: "vital_threshold:<VITAL>" | "adherence" | "ai_risk" */
   source: string;
   vitalSignId?: number;
   /**
-   * Suppress duplicates: skip if an ACTIVE alert with the same source exists
-   * for this patient within the window. Default 1h.
+   * Suppress duplicates: skip if an unresolved alert with the same source
+   * exists for this patient within the window. Default 1h.
    */
   cooldownHours?: number;
   /** Escalate to an EmergencyEvent. Defaults to severity === CRITICAL. */
@@ -37,11 +44,17 @@ export interface RaiseAlertInput {
   emergencyType?: EmergencyType;
 }
 
+/** An alert that still needs attention (ERD: New or Acknowledged). */
+const OPEN_STATUSES: AlertStatus[] = [
+  AlertStatus.NEW,
+  AlertStatus.ACKNOWLEDGED,
+];
+
 /**
- * Central alarm bell. Anything that detects a problem (vital thresholds,
- * adherence jobs, future AI anomaly detection) calls raise() — it creates
- * the Alert, notifies the treating doctors and authorized caregivers, and
- * escalates CRITICAL findings to an EmergencyEvent.
+ * Central alarm bell (ERD #24, FR-024/FR-025). Anything that detects a
+ * problem — vital thresholds, adherence jobs, AI anomaly detection — calls
+ * raise(): it creates the Alert, notifies the treating doctors and authorized
+ * caregivers, and escalates CRITICAL findings to an EmergencyEvent.
  */
 @Injectable()
 export class AlertsService {
@@ -56,13 +69,13 @@ export class AlertsService {
   ) {}
 
   async raise(input: RaiseAlertInput): Promise<Alert | null> {
-    // Cooldown: one active alert per source per window — no alarm spam.
+    // Cooldown: one open alert per source per window — no alarm spam.
     const cooldownMs = (input.cooldownHours ?? 1) * 60 * 60 * 1000;
     const duplicate = await this.prisma.alert.findFirst({
       where: {
         patientId: input.patientId,
         source: input.source,
-        status: AlertStatus.ACTIVE,
+        status: AlertStatus.NEW,
         createdAt: { gte: new Date(Date.now() - cooldownMs) },
       },
       select: { id: true },
@@ -71,16 +84,17 @@ export class AlertsService {
 
     const patient = await this.prisma.patientProfile.findUnique({
       where: { id: input.patientId },
-      include: { user: { select: { firstName: true, lastName: true } } },
+      select: { firstName: true, lastName: true },
     });
     if (!patient) return null;
-    const patientName = `${patient.user.firstName} ${patient.user.lastName}`;
+    const patientName = fullName(patient);
 
     const alert = await this.prisma.alert.create({
       data: {
         patientId: input.patientId,
+        type: input.type,
         title: input.title,
-        description: input.description,
+        description: input.description ?? input.title,
         severity: input.severity,
         source: input.source,
         vitalSignId: input.vitalSignId ?? null,
@@ -101,14 +115,14 @@ export class AlertsService {
       await this.notifications.notifyMany(circle, {
         type: NotificationType.ALERT,
         title: `Alert — ${patientName}`,
-        body: input.description ?? input.title,
+        message: alert.description,
         data: { screen: 'alerts', id: String(alert.id) },
         alertId: alert.id,
       });
     }
 
     this.logger.log(
-      `Alert ${alert.id} (${input.severity}) raised for patient ${input.patientId}: ${input.title}`,
+      `Alert ${alert.id} (${input.severity}/${input.type}) raised for patient ${input.patientId}: ${input.title}`,
     );
     return alert;
   }
@@ -142,17 +156,16 @@ export class AlertsService {
     return { items, total, page, limit };
   }
 
-  /** Doctor's Smart Alert Center: active alerts across all their patients. */
-  async listForDoctor(requester: AuthenticatedUser, page: number, limit: number) {
+  /** Doctor's Smart Alert Center: open alerts across all their patients. */
+  async listForDoctor(
+    requester: AuthenticatedUser,
+    page: number,
+    limit: number,
+  ) {
     const doctor = await this.profiles.getDoctorByUserId(requester.id);
-    const where = {
-      status: AlertStatus.ACTIVE,
-      patient: {
-        OR: [
-          { appointments: { some: { doctorId: doctor.id } } },
-          { visits: { some: { doctorId: doctor.id } } },
-        ],
-      },
+    const where: Prisma.AlertWhereInput = {
+      status: { in: OPEN_STATUSES },
+      patient: { appointments: { some: { doctorId: doctor.id } } },
     };
     const [items, total] = await this.prisma.$transaction([
       this.prisma.alert.findMany({
@@ -161,8 +174,9 @@ export class AlertsService {
           patient: {
             select: {
               id: true,
+              firstName: true,
+              lastName: true,
               medicalRecordNo: true,
-              user: { select: { firstName: true, lastName: true } },
             },
           },
         },
@@ -184,15 +198,12 @@ export class AlertsService {
     if (!alert) throw new NotFoundException('Alert not found.');
 
     // Only a treating doctor (or admin) manages alert lifecycle.
-    if (requester.role !== 'ADMIN') {
+    if (requester.role !== Role.ADMIN) {
       const doctor = await this.profiles.getDoctorByUserId(requester.id);
       const treating = await this.prisma.patientProfile.findFirst({
         where: {
           id: alert.patientId,
-          OR: [
-            { appointments: { some: { doctorId: doctor.id } } },
-            { visits: { some: { doctorId: doctor.id } } },
-          ],
+          appointments: { some: { doctorId: doctor.id } },
         },
         select: { id: true },
       });
@@ -212,5 +223,4 @@ export class AlertsService {
       },
     });
   }
-
 }

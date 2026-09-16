@@ -47,8 +47,9 @@ export class AlertsController {
   @Get('my-patients')
   @Roles(Role.DOCTOR)
   @ApiOperation({
-    summary: 'Smart Alert Center: active alerts across my patients (doctor)',
-    description: 'Sorted most-severe first. Includes patient name and MRN.',
+    summary: 'Smart Alert Center: open alerts across my patients (doctor)',
+    description:
+      'NEW and ACKNOWLEDGED alerts, most-severe first. Includes patient name and MRN.',
   })
   listForDoctor(
     @CurrentUser() user: AuthenticatedUser,
