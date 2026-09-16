@@ -1,13 +1,26 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { AuthProvider, Gender, Role, User } from '@prisma/client';
+import { AuthProvider, Role, User, UserStatus } from '@prisma/client';
+import { displayName } from '../../common/utils/user-name.util';
+import type { UserWithProfileNames } from '../../common/utils/user-name.util';
 import {
   CaregiverProfileEntity,
   DoctorProfileEntity,
   PatientProfileEntity,
 } from './profile.entities';
 
+/** A User row optionally loaded with its role profiles. */
+type UserWithProfiles = User & {
+  patientProfile?: PatientProfileEntity | null;
+  doctorProfile?: DoctorProfileEntity | null;
+  caregiverProfile?: CaregiverProfileEntity | null;
+};
+
 /**
- * Public representation of a user — never exposes the password hash.
+ * Public representation of an account — never exposes the password hash.
+ *
+ * Per the ERD, the account holds no personal identity: names live on the role
+ * profile. `fullName` is resolved from whichever profile is loaded so clients
+ * always have something to render.
  */
 export class UserEntity {
   @ApiProperty({ example: 1 })
@@ -16,26 +29,18 @@ export class UserEntity {
   @ApiProperty({ example: 'patient@example.com' })
   email!: string;
 
-  @ApiProperty({ example: 'Omar' })
-  firstName!: string;
-
-  @ApiProperty({ example: 'Hassan' })
-  lastName!: string;
+  @ApiProperty({
+    example: 'Omar Youssef',
+    description:
+      'Resolved from the role profile. Falls back to the email local part for accounts without one (admins).',
+  })
+  fullName!: string;
 
   @ApiPropertyOptional({ example: '+201001234567', nullable: true })
   phone!: string | null;
 
   @ApiPropertyOptional({
-    example: '1998-05-14T00:00:00.000Z',
-    nullable: true,
-  })
-  dateOfBirth!: Date | null;
-
-  @ApiPropertyOptional({ enum: Gender, example: Gender.MALE, nullable: true })
-  gender!: Gender | null;
-
-  @ApiPropertyOptional({
-    example: 'https://cdn.smartcare.ai/avatars/omar.png',
+    example: 'https://cdn.shifaa.ai/avatars/omar.png',
     nullable: true,
   })
   avatarUrl!: string | null;
@@ -43,14 +48,17 @@ export class UserEntity {
   @ApiProperty({ enum: Role, example: Role.PATIENT })
   role!: Role;
 
+  @ApiProperty({ enum: UserStatus, example: UserStatus.ACTIVE })
+  status!: UserStatus;
+
   @ApiProperty({ enum: AuthProvider, example: AuthProvider.EMAIL })
   provider!: AuthProvider;
 
   @ApiProperty({ example: true })
   isEmailVerified!: boolean;
 
-  @ApiProperty({ example: true })
-  isActive!: boolean;
+  @ApiPropertyOptional({ example: '2026-09-16T09:30:00.000Z', nullable: true })
+  lastLoginAt!: Date | null;
 
   @ApiProperty({ example: '2026-08-12T09:30:00.000Z' })
   createdAt!: Date;
@@ -72,8 +80,10 @@ export class UserEntity {
   caregiverProfile?: CaregiverProfileEntity | null;
 
   /** Accepts a plain User or one loaded with profile relations. */
-  static fromUser(user: User): UserEntity {
+  static fromUser(user: UserWithProfiles): UserEntity {
     const { password: _password, firebaseUid: _uid, ...safe } = user;
-    return Object.assign(new UserEntity(), safe);
+    return Object.assign(new UserEntity(), safe, {
+      fullName: displayName(user as UserWithProfileNames),
+    });
   }
 }

@@ -9,6 +9,24 @@ import {
 } from 'class-validator';
 
 export class CreateDoctorProfileDto {
+  @ApiPropertyOptional({
+    example: 'Ahmed',
+    description:
+      'Doctor first name. Optional only when the account already has a profile to copy the name from.',
+  })
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(50)
+  firstName?: string;
+
+  @ApiPropertyOptional({ example: 'Hassan' })
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(50)
+  lastName?: string;
+
   @ApiProperty({ example: 'EG-MED-123456' })
   @IsString()
   @IsNotEmpty()

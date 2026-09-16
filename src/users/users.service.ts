@@ -4,7 +4,7 @@ import {
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
-import { FilePurpose } from '@prisma/client';
+import { FilePurpose, Prisma, Role } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../prisma/prisma.service';
 import { UploadsService } from '../uploads/uploads.service';
@@ -13,6 +13,13 @@ import { UpdateProfileDto } from './dto/update-profile.dto';
 import { UserEntity } from './entities/user.entity';
 
 const BCRYPT_ROUNDS = 12;
+
+/** Every read of "me" loads the role profiles so names resolve. */
+const PROFILE_INCLUDE = {
+  patientProfile: true,
+  doctorProfile: true,
+  caregiverProfile: true,
+} satisfies Prisma.UserInclude;
 
 @Injectable()
 export class UsersService {
@@ -24,38 +31,114 @@ export class UsersService {
   async getProfile(userId: number): Promise<UserEntity> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      include: {
-        patientProfile: true,
-        doctorProfile: true,
-        caregiverProfile: true,
-      },
+      include: PROFILE_INCLUDE,
     });
     if (!user) throw new NotFoundException('User not found.');
     return UserEntity.fromUser(user);
   }
 
+  /**
+   * Partial update spanning the account and the caller's role profile.
+   * Identity (first/last name) and role-specific fields are written to the
+   * profile entity that matches `role`; fields that do not apply are ignored.
+   */
   async updateProfile(
     userId: number,
     dto: UpdateProfileDto,
   ): Promise<UserEntity> {
-    const user = await this.prisma.user.update({
+    const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      data: {
-        ...(dto.firstName !== undefined && { firstName: dto.firstName }),
-        ...(dto.lastName !== undefined && { lastName: dto.lastName }),
-        ...(dto.phone !== undefined && { phone: dto.phone }),
+      include: PROFILE_INCLUDE,
+    });
+    if (!user) throw new NotFoundException('User not found.');
+
+    const writes: Prisma.PrismaPromise<unknown>[] = [];
+
+    if (dto.phone !== undefined) {
+      writes.push(
+        this.prisma.user.update({
+          where: { id: userId },
+          data: { phone: dto.phone },
+        }),
+      );
+    }
+
+    const identity = {
+      ...(dto.firstName !== undefined && { firstName: dto.firstName }),
+      ...(dto.lastName !== undefined && { lastName: dto.lastName }),
+    };
+
+    if (user.role === Role.PATIENT && user.patientProfile) {
+      const data: Prisma.PatientProfileUpdateInput = {
+        ...identity,
         ...(dto.dateOfBirth !== undefined && {
           dateOfBirth: new Date(dto.dateOfBirth),
         }),
         ...(dto.gender !== undefined && { gender: dto.gender }),
-      },
-    });
-    return UserEntity.fromUser(user);
+        ...(dto.bloodType !== undefined && { bloodType: dto.bloodType }),
+        ...(dto.address !== undefined && { address: dto.address }),
+        ...(dto.emergencyContact !== undefined && {
+          emergencyContact: dto.emergencyContact,
+        }),
+        ...(dto.emergencyPhone !== undefined && {
+          emergencyPhone: dto.emergencyPhone,
+        }),
+        ...(dto.chronicDiseases !== undefined && {
+          chronicDiseases: dto.chronicDiseases,
+        }),
+        ...(dto.allergies !== undefined && { allergies: dto.allergies }),
+        ...(dto.insuranceProvider !== undefined && {
+          insuranceProvider: dto.insuranceProvider,
+        }),
+        ...(dto.insuranceNumber !== undefined && {
+          insuranceNumber: dto.insuranceNumber,
+        }),
+      };
+      if (Object.keys(data).length > 0) {
+        writes.push(
+          this.prisma.patientProfile.update({ where: { userId }, data }),
+        );
+      }
+    } else if (user.role === Role.DOCTOR && user.doctorProfile) {
+      const data: Prisma.DoctorProfileUpdateInput = {
+        ...identity,
+        ...(dto.bio !== undefined && { bio: dto.bio }),
+        ...(dto.yearsOfExperience !== undefined && {
+          yearsOfExperience: dto.yearsOfExperience,
+        }),
+      };
+      if (Object.keys(data).length > 0) {
+        writes.push(
+          this.prisma.doctorProfile.update({ where: { userId }, data }),
+        );
+      }
+    } else if (user.role === Role.CAREGIVER && user.caregiverProfile) {
+      const data: Prisma.CaregiverProfileUpdateInput = {
+        ...identity,
+        ...(dto.relationship !== undefined && {
+          relationship: dto.relationship,
+        }),
+        ...(dto.address !== undefined && { address: dto.address }),
+      };
+      if (Object.keys(data).length > 0) {
+        writes.push(
+          this.prisma.caregiverProfile.update({ where: { userId }, data }),
+        );
+      }
+    } else if (Object.keys(identity).length > 0) {
+      // ADMIN / HOSPITAL_ADMIN have no ERD profile entity to hold a name.
+      throw new BadRequestException(
+        'This account has no role profile, so it cannot store a name.',
+      );
+    }
+
+    if (writes.length > 0) await this.prisma.$transaction(writes);
+    return this.getProfile(userId);
   }
 
   /**
    * Uploads the image through the central UploadsService (Cloudflare R2)
-   * and points the profile at the new file's public URL.
+   * and points the account at the new file's public URL.
    */
   async updateAvatar(
     userId: number,
@@ -66,11 +149,11 @@ export class UsersService {
       userId,
       FilePurpose.AVATAR,
     );
-    const user = await this.prisma.user.update({
+    await this.prisma.user.update({
       where: { id: userId },
       data: { avatarUrl: uploaded.url },
     });
-    return UserEntity.fromUser(user);
+    return this.getProfile(userId);
   }
 
   async changePassword(
