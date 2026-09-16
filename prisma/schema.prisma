@@ -499,18 +499,18 @@ model User {
   doctorProfile    DoctorProfile?
   caregiverProfile CaregiverProfile?
 
-  otpCodes               OtpCode[]
-  refreshTokens          RefreshToken[]
-  files                  FileObject[]
-  deviceTokens           DeviceToken[]
-  notifications          Notification[]
-  sentMessages           Message[]         @relation("SentMessages")
-  chatParticipants       ChatParticipant[]
-  consentsReceived       Consent[]         @relation("ConsentGrantedTo")
-  auditLogs              AuditLog[]
-  uploadedDocuments      MedicalDocument[] @relation("DocumentUploader")
-  bookedAppointments     Appointment[]     @relation("AppointmentBookedBy")
-  acknowledgedEmergencies EmergencyEvent[] @relation("EmergencyAcknowledgedBy")
+  otpCodes                OtpCode[]
+  refreshTokens           RefreshToken[]
+  files                   FileObject[]
+  deviceTokens            DeviceToken[]
+  notifications           Notification[]
+  sentMessages            Message[]         @relation("SentMessages")
+  chatParticipants        ChatParticipant[]
+  consentsReceived        Consent[]         @relation("ConsentGrantedTo")
+  auditLogs               AuditLog[]
+  uploadedDocuments       MedicalDocument[] @relation("DocumentUploader")
+  bookedAppointments      Appointment[]     @relation("AppointmentBookedBy")
+  acknowledgedEmergencies EmergencyEvent[]  @relation("EmergencyAcknowledgedBy")
 
   @@index([role, status])
   @@map("users")
@@ -518,23 +518,23 @@ model User {
 
 /// ERD #2 Patient. User rows with role=PATIENT get exactly one.
 model PatientProfile {
-  id              Int           @id @default(autoincrement())
-  userId          Int           @unique
-  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  firstName       String
-  lastName        String
+  id               Int           @id @default(autoincrement())
+  userId           Int           @unique
+  user             User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  firstName        String
+  lastName         String
   /// Human-readable medical record number, e.g. "SH-2026-000042"
-  medicalRecordNo String        @unique
-  dateOfBirth     DateTime?
-  gender          Gender?
-  bloodType       BloodType?
-  address         String?
+  medicalRecordNo  String        @unique
+  dateOfBirth      DateTime?
+  gender           Gender?
+  bloodType        BloodType?
+  address          String?
   /// ERD EmergencyContact / EmergencyPhone — the single "who to call" pair
   /// on the profile. The full prioritized SMS list is EmergencyContact[].
   emergencyContact String?
   emergencyPhone   String?
-  registrationDate DateTime     @default(now())
-  status          ProfileStatus @default(ACTIVE)
+  registrationDate DateTime      @default(now())
+  status           ProfileStatus @default(ACTIVE)
 
   /// Clinical background used by the AI triage and risk modules.
   chronicDiseases   String?
@@ -597,8 +597,8 @@ model CaregiverProfile {
   userId Int  @unique
   user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  firstName String
-  lastName  String
+  firstName    String
+  lastName     String
   /// e.g. "spouse", "son", "professional nurse"
   relationship String
   address      String?
@@ -633,14 +633,14 @@ model PatientCaregiver {
 
 /// ERD #30 Consent — explicit, auditable data-sharing permission (SEC-003).
 model Consent {
-  id              Int           @id @default(autoincrement())
+  id              Int            @id @default(autoincrement())
   patientId       Int
   patient         PatientProfile @relation(fields: [patientId], references: [id], onDelete: Cascade)
   grantedToUserId Int
-  grantedTo       User          @relation("ConsentGrantedTo", fields: [grantedToUserId], references: [id], onDelete: Cascade)
+  grantedTo       User           @relation("ConsentGrantedTo", fields: [grantedToUserId], references: [id], onDelete: Cascade)
   type            ConsentType
-  status          ConsentStatus @default(ACTIVE)
-  grantedAt       DateTime      @default(now())
+  status          ConsentStatus  @default(ACTIVE)
+  grantedAt       DateTime       @default(now())
   expiresAt       DateTime?
   revokedAt       DateTime?
 
@@ -753,20 +753,20 @@ model Visit {
 /// nullable and `patientId` is carried so a pre-visit AI_INITIAL assessment
 /// still belongs to someone; doctor-authored assessments always set `visitId`.
 model Assessment {
-  id           Int            @id @default(autoincrement())
-  visitId      Int?
-  visit        Visit?         @relation(fields: [visitId], references: [id], onDelete: Cascade)
-  patientId    Int
-  patient      PatientProfile @relation(fields: [patientId], references: [id], onDelete: Cascade)
-  date         DateTime       @default(now())
-  type         AssessmentType
+  id                 Int            @id @default(autoincrement())
+  visitId            Int?
+  visit              Visit?         @relation(fields: [visitId], references: [id], onDelete: Cascade)
+  patientId          Int
+  patient            PatientProfile @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  date               DateTime       @default(now())
+  type               AssessmentType
   /// Symptoms as reported (JSON string: [{name, duration, severity}, ...])
-  symptoms     String?
-  observations String?
-  riskLevel    RiskLevel?
+  symptoms           String?
+  observations       String?
+  riskLevel          RiskLevel?
   /// AI output: suggested specialty referral, e.g. "cardiology"
   suggestedSpecialty String?
-  notes        String?
+  notes              String?
 
   @@index([patientId, date])
   @@index([visitId])
@@ -967,17 +967,17 @@ model MedicineTracking {
 /// Deviation: `value` is DOUBLE rather than the dictionary's VARCHAR —
 /// thresholds, trends and time-series charts require a numeric type.
 model VitalSign {
-  id         Int            @id @default(autoincrement())
-  patientId  Int
-  patient    PatientProfile @relation(fields: [patientId], references: [id], onDelete: Cascade)
-  type       VitalType
-  value      Float
-  unit       String
-  measuredAt DateTime       @default(now())
-  source     VitalSource    @default(MANUAL)
+  id              Int            @id @default(autoincrement())
+  patientId       Int
+  patient         PatientProfile @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  type            VitalType
+  value           Float
+  unit            String
+  measuredAt      DateTime       @default(now())
+  source          VitalSource    @default(MANUAL)
   /// Raw device row this measurement was promoted from (BR-009 keeps device
   /// data addressable through the Device, this keeps it traceable).
-  deviceReadingId Int?      @unique
+  deviceReadingId Int?           @unique
   deviceReading   DeviceReading? @relation(fields: [deviceReadingId], references: [id])
 
   @@index([patientId, type, measuredAt])
@@ -986,15 +986,15 @@ model VitalSign {
 
 /// ERD #22 Device — wearables / IoT health devices paired to a patient.
 model Device {
-  id            Int          @id @default(autoincrement())
+  id            Int            @id @default(autoincrement())
   patientId     Int
   patient       PatientProfile @relation(fields: [patientId], references: [id], onDelete: Cascade)
   type          DeviceType
   name          String
   manufacturer  String?
-  serialNumber  String?      @unique
-  connectedDate DateTime     @default(now())
-  status        DeviceStatus @default(CONNECTED)
+  serialNumber  String?        @unique
+  connectedDate DateTime       @default(now())
+  status        DeviceStatus   @default(CONNECTED)
   lastSync      DateTime?
 
   readings DeviceReading[]
@@ -1058,24 +1058,24 @@ model Alert {
 /// CRITICAL alert. Drives the emergency notification fan-out (push + SMS)
 /// to caregivers and emergency contacts.
 model EmergencyEvent {
-  id          Int             @id @default(autoincrement())
-  patientId   Int
-  patient     PatientProfile  @relation(fields: [patientId], references: [id], onDelete: Cascade)
-  type        EmergencyType
-  status      EmergencyStatus @default(ACTIVE)
+  id               Int             @id @default(autoincrement())
+  patientId        Int
+  patient          PatientProfile  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  type             EmergencyType
+  status           EmergencyStatus @default(ACTIVE)
   /// GPS position captured when the event fired (mobile SOS)
-  latitude    Float?
-  longitude   Float?
-  description String?
+  latitude         Float?
+  longitude        Float?
+  description      String?
   /// Escalated from this alert, if system-generated
-  alertId     Int?
-  alert       Alert?          @relation(fields: [alertId], references: [id])
+  alertId          Int?
+  alert            Alert?          @relation(fields: [alertId], references: [id])
   /// User (caregiver/doctor) who acknowledged the emergency
   acknowledgedById Int?
-  acknowledgedBy   User?      @relation("EmergencyAcknowledgedBy", fields: [acknowledgedById], references: [id])
+  acknowledgedBy   User?           @relation("EmergencyAcknowledgedBy", fields: [acknowledgedById], references: [id])
   acknowledgedAt   DateTime?
   resolvedAt       DateTime?
-  createdAt        DateTime   @default(now())
+  createdAt        DateTime        @default(now())
 
   @@index([patientId, status])
   @@map("emergency_events")
@@ -1159,13 +1159,13 @@ model Chat {
 
 /// ERD #28 ChatParticipant — user membership in a chat.
 model ChatParticipant {
-  id       Int               @id @default(autoincrement())
-  chatId   Int
-  chat     Chat              @relation(fields: [chatId], references: [id], onDelete: Cascade)
-  userId   Int
-  user     User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  joinedAt DateTime          @default(now())
-  status   ParticipantStatus @default(ACTIVE)
+  id         Int               @id @default(autoincrement())
+  chatId     Int
+  chat       Chat              @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  userId     Int
+  user       User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  joinedAt   DateTime          @default(now())
+  status     ParticipantStatus @default(ACTIVE)
   /// Last time this participant opened the chat (unread counters)
   lastReadAt DateTime?
 

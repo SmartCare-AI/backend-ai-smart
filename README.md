@@ -43,7 +43,25 @@ src/
 ├── auth/          # register, email verification, login, refresh rotation,
 │   │              # forgot/reset password, Google & Apple via Firebase
 │   ├── dto/  strategies/  entities/
-├── users/         # profile, edit profile, change password, avatar upload
+├── users/         # account + role profiles (ERD Patient/Doctor/Caregiver),
+│               # edit profile, change password, avatar upload
+├── hospitals/     # hospitals & departments
+├── appointments/  # booking, doctor schedule, confirm/cancel
+├── visits/        # encounters, assessments, diagnoses, tests, images
+├── treatment/     # treatment plans, prescriptions, medicine catalog,
+│               # medicine tracking + the adherence/reminder scheduler
+├── vitals/        # clinical measurement stream + threshold rules
+├── devices/       # wearables (ERD Device) and their raw DeviceReadings
+├── alerts/        # Smart Alert Center
+├── emergency/     # SOS, escalation to SMS, first-aid knowledge base
+├── documents/     # medical document library (ERD MedicalDocument)
+├── telemedicine/  # online visits (ERD OnlineVisit)
+├── chat/          # REST + Socket.IO messaging and WebRTC call signalling
+├── notifications/ # in-app feed + FCM push
+├── analytics/     # hospital dashboard aggregates
+├── ai/            # symptom triage + explainable risk snapshot
+├── consent/       # the single access-control rule for patient data
+├── audit/         # compliance trail for every mutating request
 ├── uploads/       # central file service — files get an id, stored via a
 │   └── storage/   # pluggable StorageProvider (local disk | Cloudflare R2)
 ├── mail/          # Nodemailer (Gmail SMTP) — verification & reset codes
@@ -53,6 +71,23 @@ src/
 ├── config/        # environment validation (fails fast on bad config)
 └── main.ts        # helmet, CORS, validation pipe, Swagger, static /files
 ```
+
+## Data model
+
+The schema implements the project's 31-entity ERD
+(`ERD/SHIFAA ERD.drawio` + `ERD/shifaa_data_dictionary_bw.pdf`) and the business
+rules in `ERD/SHIFAA_BRD.pdf`. Entity coverage, the breaking API changes from
+the alignment, and every documented deviation are in
+[docs/ERD-ALIGNMENT.md](docs/ERD-ALIGNMENT.md).
+
+Key structural rules the database enforces:
+
+- **User/Profile separation** — the account holds credentials, role and status;
+  personal identity lives on `PatientProfile` / `DoctorProfile` / `CaregiverProfile`.
+- **BR-004** — every `Visit` belongs to an `Appointment`.
+- **BR-007** — every `Prescription` belongs to a `TreatmentPlan`.
+- **BR-009** — a `DeviceReading` belongs to a `Device` and inherits its patient.
+- **BR-011** — an `OnlineVisit` belongs to an `Appointment`.
 
 ## Authentication flow
 
@@ -84,6 +119,7 @@ Every variable is documented inline in [.env.example](.env.example). Summary:
 | Email | `MAIL_USER`, `MAIL_PASSWORD` (Google **App Password**), `MAIL_FROM` | for real emails |
 | Social | `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY` (service account) | for Google/Apple |
 | Rate limit | `REDIS_URL` | production |
+| Telemedicine | `TELEMEDICINE_BASE_URL` | defaults work |
 | Storage | `STORAGE_DRIVER` (local), `UPLOADS_DIR`, `APP_URL` | defaults work |
 
 > **Firebase note:** the backend needs the **Admin SDK service account** key

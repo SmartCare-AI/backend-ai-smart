@@ -58,6 +58,11 @@ class EnvironmentVariables {
   @IsOptional()
   @IsString()
   FIREBASE_PRIVATE_KEY?: string;
+
+  /** Base URL for telemedicine meeting links (ERD #26 Online Visit). */
+  @IsOptional()
+  @IsString()
+  TELEMEDICINE_BASE_URL?: string;
 }
 
 export function validateEnv(config: Record<string, unknown>) {

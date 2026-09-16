@@ -11,7 +11,9 @@ import {
   DeviceStatus,
   Prisma,
   RiskLevel,
+  VitalSign,
   VitalSource,
+  VitalType,
 } from '@prisma/client';
 import { AlertsService } from '../alerts/alerts.service';
 import type { AuthenticatedUser } from '../common/decorators/current-user.decorator';
@@ -134,54 +136,46 @@ export class DevicesService {
       throw new BadRequestException('This device is inactive.');
     }
     const promote = dto.promoteToVitals !== false;
+    const now = new Date();
 
+    // Two bulk inserts rather than one round-trip per reading: a 200-point
+    // sync must not spend the interactive-transaction budget on 400
+    // sequential statements.
     const vitals = await this.prisma.$transaction(async (tx) => {
-      const promoted: {
-        id: number;
-        type: string;
-        value: number;
-        unit: string;
-        patientId: number;
-      }[] = [];
+      const prepared = dto.readings.map((reading) => ({
+        ...reading,
+        measuredAt: reading.measuredAt ? new Date(reading.measuredAt) : now,
+      }));
 
-      for (const reading of dto.readings) {
-        const measuredAt = reading.measuredAt
-          ? new Date(reading.measuredAt)
-          : new Date();
-        const raw = await tx.deviceReading.create({
-          data: {
-            deviceId: device.id,
-            type: reading.type,
-            value: reading.value,
-            unit: reading.unit ?? null,
-            measuredAt,
-          },
-        });
-        if (!promote) continue;
+      const rawReadings = await tx.deviceReading.createManyAndReturn({
+        data: prepared.map((r) => ({
+          deviceId: device.id,
+          type: r.type,
+          value: r.value,
+          unit: r.unit ?? null,
+          measuredAt: r.measuredAt,
+        })),
+      });
 
-        const vital = await tx.vitalSign.create({
-          data: {
-            patientId: device.patientId,
-            type: reading.type,
-            value: reading.value,
-            unit: reading.unit ?? '',
-            source: VitalSource.DEVICE,
-            deviceReadingId: raw.id,
-            measuredAt,
-          },
-        });
-        promoted.push({
-          id: vital.id,
-          type: vital.type,
-          value: vital.value,
-          unit: vital.unit,
-          patientId: vital.patientId,
-        });
-      }
+      // A single INSERT ... RETURNING gives the rows back in input order, so
+      // each raw reading lines up with the prepared entry at the same index.
+      const promoted = promote
+        ? await tx.vitalSign.createManyAndReturn({
+            data: prepared.map((r, i) => ({
+              patientId: device.patientId,
+              type: r.type,
+              value: r.value,
+              unit: r.unit ?? '',
+              source: VitalSource.DEVICE,
+              deviceReadingId: rawReadings[i].id,
+              measuredAt: r.measuredAt,
+            })),
+          })
+        : [];
 
       await tx.device.update({
         where: { id: device.id },
-        data: { lastSync: new Date(), status: DeviceStatus.CONNECTED },
+        data: { lastSync: now, status: DeviceStatus.CONNECTED },
       });
       return promoted;
     });
@@ -239,43 +233,30 @@ export class DevicesService {
 
   // -------------------------------------------------------------------------
 
-  private async raiseWorstPerType(
-    vitals: {
-      id: number;
-      type: string;
-      value: number;
-      unit: string;
-      patientId: number;
-    }[],
-  ) {
-    const worst = new Map<string, (typeof vitals)[number]>();
+  /**
+   * One alert per vital type per sync, for the worst reading of that type —
+   * a 200-point sync must not fire 200 alerts.
+   */
+  private async raiseWorstPerType(vitals: VitalSign[]) {
+    const worst = new Map<
+      VitalType,
+      { vital: VitalSign; severity: RiskLevel }
+    >();
     for (const vital of vitals) {
-      const violation = evaluateVital(
-        vital.type as Parameters<typeof evaluateVital>[0],
-        vital.value,
-      );
+      const violation = evaluateVital(vital.type, vital.value);
       if (!violation) continue;
       const current = worst.get(vital.type);
-      const currentSeverity = current
-        ? evaluateVital(
-            current.type as Parameters<typeof evaluateVital>[0],
-            current.value,
-          )?.severity
-        : undefined;
       if (
         !current ||
         (violation.severity === RiskLevel.CRITICAL &&
-          currentSeverity !== RiskLevel.CRITICAL)
+          current.severity !== RiskLevel.CRITICAL)
       ) {
-        worst.set(vital.type, vital);
+        worst.set(vital.type, { vital, severity: violation.severity });
       }
     }
 
-    for (const vital of worst.values()) {
-      const violation = evaluateVital(
-        vital.type as Parameters<typeof evaluateVital>[0],
-        vital.value,
-      );
+    for (const { vital } of worst.values()) {
+      const violation = evaluateVital(vital.type, vital.value);
       if (!violation) continue;
       const label = vital.type.toLowerCase().replace(/_/g, ' ');
       await this.alerts.raise({

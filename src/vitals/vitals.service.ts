@@ -57,16 +57,51 @@ export class VitalsService {
     for (const deviceId of deviceIds) {
       await this.assertDeviceOwnership(patient.id, deviceId);
     }
+    const now = new Date();
 
+    // Two bulk inserts rather than one round-trip per reading: a 100-point
+    // smartwatch sync must not spend the interactive-transaction budget on
+    // 200 sequential statements.
     const created = await this.prisma.$transaction(async (tx) => {
-      const rows: VitalSign[] = [];
-      for (const reading of dto.readings) {
-        rows.push(await this.persistReading(tx, patient.id, reading));
-      }
+      const prepared = dto.readings.map((reading) => ({
+        ...reading,
+        measuredAt: reading.measuredAt ? new Date(reading.measuredAt) : now,
+      }));
+
+      const deviceBacked = prepared.filter((r) => r.deviceId);
+      const rawReadings = deviceBacked.length
+        ? await tx.deviceReading.createManyAndReturn({
+            data: deviceBacked.map((r) => ({
+              deviceId: r.deviceId!,
+              type: r.type,
+              value: r.value,
+              unit: r.unit,
+              measuredAt: r.measuredAt,
+            })),
+          })
+        : [];
+      // A single INSERT ... RETURNING gives the rows back in input order, so
+      // the two lists line up one-to-one.
+      const rawIds = new Map(
+        deviceBacked.map((r, i) => [r, rawReadings[i].id]),
+      );
+
+      const rows = await tx.vitalSign.createManyAndReturn({
+        data: prepared.map((r) => ({
+          patientId: patient.id,
+          type: r.type,
+          value: r.value,
+          unit: r.unit,
+          source: r.deviceId ? VitalSource.DEVICE : VitalSource.MANUAL,
+          deviceReadingId: rawIds.get(r) ?? null,
+          measuredAt: r.measuredAt,
+        })),
+      });
+
       if (deviceIds.length > 0) {
         await tx.device.updateMany({
           where: { id: { in: deviceIds } },
-          data: { lastSync: new Date() },
+          data: { lastSync: now },
         });
       }
       return rows;
