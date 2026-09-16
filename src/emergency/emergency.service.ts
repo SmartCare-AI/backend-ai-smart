@@ -17,6 +17,11 @@ import {
 } from '@prisma/client';
 import type { Job } from 'bullmq';
 import type { AuthenticatedUser } from '../common/decorators/current-user.decorator';
+import {
+  USER_NAME_INCLUDE,
+  displayName,
+  fullName,
+} from '../common/utils/user-name.util';
 import { ConsentService } from '../consent/consent.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -113,7 +118,7 @@ export class EmergencyService implements OnModuleInit {
   async openEvent(input: OpenEmergencyInput): Promise<EmergencyEvent> {
     const patient = await this.prisma.patientProfile.findUnique({
       where: { id: input.patientId },
-      include: { user: { select: { id: true, firstName: true, lastName: true } } },
+      select: { id: true, firstName: true, lastName: true },
     });
     if (!patient) throw new NotFoundException('Patient not found.');
 
@@ -128,7 +133,7 @@ export class EmergencyService implements OnModuleInit {
       },
     });
 
-    const patientName = `${patient.user.firstName} ${patient.user.lastName}`;
+    const patientName = fullName(patient);
     const location =
       input.latitude != null && input.longitude != null
         ? ` Location: https://maps.google.com/?q=${input.latitude},${input.longitude}`
@@ -137,7 +142,7 @@ export class EmergencyService implements OnModuleInit {
     await this.notifications.notifyMany(circle, {
       type: NotificationType.EMERGENCY,
       title: `🚨 EMERGENCY — ${patientName}`,
-      body: `${input.description ?? input.type}.${location} Open the app and tap "I'm on it".`,
+      message: `${input.description ?? input.type}.${location} Open the app and tap "I'm on it".`,
       data: { screen: 'emergency', id: String(event.id) },
       alertId: input.alertId,
     });
@@ -177,13 +182,13 @@ export class EmergencyService implements OnModuleInit {
     });
     const responder = await this.prisma.user.findUnique({
       where: { id: requester.id },
-      select: { firstName: true, lastName: true },
+      select: { email: true, ...USER_NAME_INCLUDE },
     });
     if (patient && responder) {
       await this.notifications.notify(patient.userId, {
         type: NotificationType.EMERGENCY,
         title: 'Help is on the way',
-        body: `${responder.firstName} ${responder.lastName} has seen your emergency and is responding.`,
+        message: `${displayName(responder)} has seen your emergency and is responding.`,
         data: { screen: 'emergency', id: String(id) },
       });
     }
@@ -267,8 +272,9 @@ export class EmergencyService implements OnModuleInit {
       where: { id: emergencyEventId },
       include: {
         patient: {
-          include: {
-            user: { select: { firstName: true, lastName: true } },
+          select: {
+            firstName: true,
+            lastName: true,
             emergencyContacts: { orderBy: { priority: 'asc' } },
           },
         },
@@ -276,16 +282,16 @@ export class EmergencyService implements OnModuleInit {
     });
     if (!event || event.status !== EmergencyStatus.ACTIVE) return;
 
-    const name = `${event.patient.user.firstName} ${event.patient.user.lastName}`;
+    const name = fullName(event.patient);
     const location =
       event.latitude != null && event.longitude != null
         ? ` Location: https://maps.google.com/?q=${event.latitude},${event.longitude}`
         : '';
-    const message = `SmartCare EMERGENCY: ${name} needs help. ${event.description ?? ''}${location}`;
+    const smsBody = `SHIFAA EMERGENCY: ${name} needs help. ${event.description ?? ''}${location}`;
 
     for (const contact of event.patient.emergencyContacts) {
       try {
-        await this.sms.send(contact.phone, message);
+        await this.sms.send(contact.phone, smsBody);
       } catch (err) {
         this.logger.error(
           `SMS to ${contact.name} failed: ${(err as Error).message}`,
@@ -298,7 +304,7 @@ export class EmergencyService implements OnModuleInit {
     await this.notifications.notifyMany(circle, {
       type: NotificationType.EMERGENCY,
       title: `🚨 STILL UNANSWERED — ${name}`,
-      body: `The emergency has not been acknowledged. SMS sent to ${event.patient.emergencyContacts.length} emergency contact(s).`,
+      message: `The emergency has not been acknowledged. SMS sent to ${event.patient.emergencyContacts.length} emergency contact(s).`,
       data: { screen: 'emergency', id: String(event.id) },
     });
     this.logger.warn(
