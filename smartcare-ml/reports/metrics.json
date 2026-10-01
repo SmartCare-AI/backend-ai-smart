@@ -1,0 +1,831 @@
+{
+  "train_rows": 3145,
+  "specialty": {
+    "test_rows": 786,
+    "classes": [
+      "allergy and immunology",
+      "cardiology",
+      "dermatology",
+      "endocrinology",
+      "gastroenterology",
+      "general surgery",
+      "hematology",
+      "infectious disease",
+      "internal medicine",
+      "neurology",
+      "orthopedics",
+      "otolaryngology",
+      "psychiatry",
+      "pulmonology",
+      "rheumatology",
+      "urology",
+      "vascular surgery"
+    ],
+    "model": {
+      "accuracy": 0.9962,
+      "macro_f1": 0.9915
+    },
+    "rules_baseline": {
+      "accuracy": 0.3104,
+      "macro_f1": 0.1919
+    },
+    "full_system": {
+      "accuracy": 0.9962,
+      "macro_f1": 0.9915
+    },
+    "by_source": {
+      "ddx": {
+        "rows": 494,
+        "model_accuracy": 0.998,
+        "rules_accuracy": 0.2713
+      },
+      "dsp": {
+        "rows": 61,
+        "model_accuracy": 1.0,
+        "rules_accuracy": 0.459
+      },
+      "s2d": {
+        "rows": 231,
+        "model_accuracy": 0.9913,
+        "rules_accuracy": 0.355
+      }
+    },
+    "rules_reachable_rows": {
+      "rows": 587,
+      "model_accuracy": 0.9966,
+      "rules_accuracy": 0.4157
+    }
+  },
+  "unseen_disease_stress_test": {
+    "diseases": 79,
+    "rows": 3698,
+    "accuracy": 0.4951,
+    "per_disease": [
+      {
+        "disease": "acne",
+        "specialty": "dermatology",
+        "sources": "dsp+s2d",
+        "rows": 51,
+        "accuracy": 1.0,
+        "most_predicted": "dermatology"
+      },
+      {
+        "disease": "acute copd exacerbation / infection",
+        "specialty": "pulmonology",
+        "sources": "ddx",
+        "rows": 9,
+        "accuracy": 1.0,
+        "most_predicted": "pulmonology"
+      },
+      {
+        "disease": "acute dystonic reactions",
+        "specialty": "neurology",
+        "sources": "ddx",
+        "rows": 60,
+        "accuracy": 0.5833,
+        "most_predicted": "neurology"
+      },
+      {
+        "disease": "acute laryngitis",
+        "specialty": "otolaryngology",
+        "sources": "ddx",
+        "rows": 60,
+        "accuracy": 1.0,
+        "most_predicted": "otolaryngology"
+      },
+      {
+        "disease": "acute otitis media",
+        "specialty": "otolaryngology",
+        "sources": "ddx",
+        "rows": 52,
+        "accuracy": 0.5,
+        "most_predicted": "otolaryngology"
+      },
+      {
+        "disease": "acute pulmonary edema",
+        "specialty": "cardiology",
+        "sources": "ddx",
+        "rows": 60,
+        "accuracy": 1.0,
+        "most_predicted": "cardiology"
+      },
+      {
+        "disease": "acute rhinosinusitis",
+        "specialty": "otolaryngology",
+        "sources": "ddx",
+        "rows": 60,
+        "accuracy": 1.0,
+        "most_predicted": "otolaryngology"
+      },
+      {
+        "disease": "alcoholic hepatitis",
+        "specialty": "gastroenterology",
+        "sources": "dsp",
+        "rows": 8,
+        "accuracy": 1.0,
+        "most_predicted": "gastroenterology"
+      },
+      {
+        "disease": "allergic sinusitis",
+        "specialty": "allergy and immunology",
+        "sources": "ddx",
+        "rows": 7,
+        "accuracy": 0.7143,
+        "most_predicted": "allergy and immunology"
+      },
+      {
+        "disease": "allergy",
+        "specialty": "allergy and immunology",
+        "sources": "dsp+s2d",
+        "rows": 55,
+        "accuracy": 0.1273,
+        "most_predicted": "internal medicine"
+      },
+      {
+        "disease": "anaphylaxis",
+        "specialty": "allergy and immunology",
+        "sources": "ddx",
+        "rows": 60,
+        "accuracy": 0.0,
+        "most_predicted": "internal medicine"
+      },
+      {
+        "disease": "arthritis",
+        "specialty": "rheumatology",
+        "sources": "dsp+s2d",
+        "rows": 52,
+        "accuracy": 0.0,
+        "most_predicted": "orthopedics"
+      },
+      {
+        "disease": "atrial fibrillation",
+        "specialty": "cardiology",
+        "sources": "ddx",
+        "rows": 28,
+        "accuracy": 1.0,
+        "most_predicted": "cardiology"
+      },
+      {
+        "disease": "boerhaave",
+        "specialty": "general surgery",
+        "sources": "ddx",
+        "rows": 60,
+        "accuracy": 0.0,
+        "most_predicted": "gastroenterology"
+      },
+      {
+        "disease": "bronchial asthma",
+        "specialty": "pulmonology",
+        "sources": "dsp+s2d",
+        "rows": 56,
+        "accuracy": 0.5,
+        "most_predicted": "pulmonology"
+      },
+      {
+        "disease": "bronchiectasis",
+        "specialty": "pulmonology",
+        "sources": "ddx",
+        "rows": 8,
+        "accuracy": 1.0,
+        "most_predicted": "pulmonology"
+      },
+      {
+        "disease": "bronchiolitis",
+        "specialty": "pulmonology",
+        "sources": "ddx",
+        "rows": 11,
+        "accuracy": 0.4545,
+        "most_predicted": "otolaryngology"
+      },
+      {
+        "disease": "bronchitis",
+        "specialty": "pulmonology",
+        "sources": "ddx",
+        "rows": 60,
+        "accuracy": 0.9,
+        "most_predicted": "pulmonology"
+      },
+      {
+        "disease": "cervical spondylosis",
+        "specialty": "orthopedics",
+        "sources": "dsp+s2d",
+        "rows": 55,
+        "accuracy": 0.0,
+        "most_predicted": "cardiology"
+      },
+      {
+        "disease": "chagas",
+        "specialty": "infectious disease",
+        "sources": "ddx",
+        "rows": 60,
+        "accuracy": 0.8667,
+        "most_predicted": "infectious disease"
+      },
+      {
+        "disease": "chicken pox",
+        "specialty": "infectious disease",
+        "sources": "dsp+s2d",
+        "rows": 59,
+        "accuracy": 0.6441,
+        "most_predicted": "infectious disease"
+      },
+      {
+        "disease": "chronic cholestasis",
+        "specialty": "gastroenterology",
+        "sources": "dsp",
+        "rows": 8,
+        "accuracy": 1.0,
+        "most_predicted": "gastroenterology"
+      },
+      {
+        "disease": "chronic rhinosinusitis",
+        "specialty": "otolaryngology",
+        "sources": "ddx",
+        "rows": 60,
+        "accuracy": 1.0,
+        "most_predicted": "otolaryngology"
+      },
+      {
+        "disease": "cluster headache",
+        "specialty": "neurology",
+        "sources": "ddx",
+        "rows": 60,
+        "accuracy": 0.0,
+        "most_predicted": "otolaryngology"
+      },
+      {
+        "disease": "common cold",
+        "specialty": "internal medicine",
+        "sources": "ddx+dsp+s2d",
+        "rows": 118,
+        "accuracy": 0.1271,
+        "most_predicted": "pulmonology"
+      },
+      {
+        "disease": "croup",
+        "specialty": "otolaryngology",
+        "sources": "ddx",
+        "rows": 60,
+        "accuracy": 0.45,
+        "most_predicted": "pulmonology"
+      },
+      {
+        "disease": "dengue",
+        "specialty": "infectious disease",
+        "sources": "dsp+s2d",
+        "rows": 60,
+        "accuracy": 0.8,
+        "most_predicted": "infectious disease"
+      },
+      {
+        "disease": "diabetes",
+        "specialty": "endocrinology",
+        "sources": "dsp+s2d",
+        "rows": 59,
+        "accuracy": 0.1017,
+        "most_predicted": "allergy and immunology"
+      },
+      {
+        "disease": "drug reaction",
+        "specialty": "allergy and immunology",
+        "sources": "dsp+s2d",
+        "rows": 56,
+        "accuracy": 0.0536,
+        "most_predicted": "gastroenterology"
+      },
+      {
+        "disease": "ebola",
+        "specialty": "infectious disease",
+        "sources": "ddx",
+        "rows": 60,
+        "accuracy": 0.4667,
+        "most_predicted": "infectious disease"
+      },
+      {
+        "disease": "epiglottitis",
+        "specialty": "otolaryngology",
+        "sources": "ddx",
+        "rows": 60,
+        "accuracy": 1.0,
+        "most_predicted": "otolaryngology"
+      },
+      {
+        "disease": "fungal infection",
+        "specialty": "dermatology",
+        "sources": "dsp+s2d",
+        "rows": 55,
+        "accuracy": 0.6909,
+        "most_predicted": "dermatology"
+      },
+      {
+        "disease": "gastroenteritis",
+        "specialty": "gastroenterology",
+        "sources": "dsp",
+        "rows": 5,
+        "accuracy": 0.0,
+        "most_predicted": "infectious disease"
+      },
+      {
+        "disease": "gastroesophageal reflux disease",
+        "specialty": "gastroenterology",
+        "sources": "ddx+dsp+s2d",
+        "rows": 115,
+        "accuracy": 0.3565,
+        "most_predicted": "gastroenterology"
+      },
+      {
+        "disease": "guillain-barre syndrome",
+        "specialty": "neurology",
+        "sources": "ddx",
+        "rows": 60,
+        "accuracy": 0.5833,
+        "most_predicted": "neurology"
+      },
+      {
+        "disease": "heart attack",
+        "specialty": "cardiology",
+        "sources": "ddx+dsp",
+        "rows": 65,
+        "accuracy": 0.9231,
+        "most_predicted": "cardiology"
+      },
+      {
+        "disease": "hemorrhoids",
+        "specialty": "general surgery",
+        "sources": "dsp+s2d",
+        "rows": 47,
+        "accuracy": 0.0,
+        "most_predicted": "infectious disease"
+      },
+      {
+        "disease": "hepatitis a",
+        "specialty": "gastroenterology",
+        "sources": "dsp",
+        "rows": 9,
+        "accuracy": 1.0,
+        "most_predicted": "gastroenterology"
+      },
+      {
+        "disease": "hepatitis b",
+        "specialty": "gastroenterology",
+        "sources": "dsp",
+        "rows": 9,
+        "accuracy": 1.0,
+        "most_predicted": "gastroenterology"
+      },
+      {
+        "disease": "hepatitis c",
+        "specialty": "gastroenterology",
+        "sources": "dsp",
+        "rows": 7,
+        "accuracy": 1.0,
+        "most_predicted": "gastroenterology"
+      },
+      {
+        "disease": "hepatitis d",
+        "specialty": "gastroenterology",
+        "sources": "dsp",
+        "rows": 10,
+        "accuracy": 1.0,
+        "most_predicted": "gastroenterology"
+      },
+      {
+        "disease": "hepatitis e",
+        "specialty": "gastroenterology",
+        "sources": "dsp",
+        "rows": 9,
+        "accuracy": 1.0,
+        "most_predicted": "gastroenterology"
+      },
+      {
+        "disease": "hiv / aids",
+        "specialty": "infectious disease",
+        "sources": "ddx+dsp",
+        "rows": 65,
+        "accuracy": 0.0615,
+        "most_predicted": "internal medicine"
+      },
+      {
+        "disease": "hypertension",
+        "specialty": "cardiology",
+        "sources": "dsp+s2d",
+        "rows": 56,
+        "accuracy": 0.0,
+        "most_predicted": "orthopedics"
+      },
+      {
+        "disease": "hyperthyroidism",
+        "specialty": "endocrinology",
+        "sources": "dsp",
+        "rows": 9,
+        "accuracy": 1.0,
+        "most_predicted": "endocrinology"
+      },
+      {
+        "disease": "hypoglycemia",
+        "specialty": "endocrinology",
+        "sources": "dsp",
+        "rows": 9,
+        "accuracy": 0.1111,
+        "most_predicted": "neurology"
+      },
+      {
+        "disease": "hypothyroidism",
+        "specialty": "endocrinology",
+        "sources": "dsp",
+        "rows": 8,
+        "accuracy": 1.0,
+        "most_predicted": "endocrinology"
+      },
+      {
+        "disease": "impetigo",
+        "specialty": "dermatology",
+        "sources": "dsp+s2d",
+        "rows": 56,
+        "accuracy": 0.2857,
+        "most_predicted": "infectious disease"
+      },
+      {
+        "disease": "influenza",
+        "specialty": "internal medicine",
+        "sources": "ddx",
+        "rows": 60,
+        "accuracy": 0.8667,
+        "most_predicted": "internal medicine"
+      },
+      {
+        "disease": "inguinal hernia",
+        "specialty": "general surgery",
+        "sources": "ddx",
+        "rows": 60,
+        "accuracy": 0.0,
+        "most_predicted": "allergy and immunology"
+      },
+      {
+        "disease": "jaundice",
+        "specialty": "gastroenterology",
+        "sources": "dsp+s2d",
+        "rows": 47,
+        "accuracy": 0.4043,
+        "most_predicted": "infectious disease"
+      },
+      {
+        "disease": "laryngospasm",
+        "specialty": "otolaryngology",
+        "sources": "ddx",
+        "rows": 1,
+        "accuracy": 1.0,
+        "most_predicted": "otolaryngology"
+      },
+      {
+        "disease": "localized edema",
+        "specialty": "internal medicine",
+        "sources": "ddx",
+        "rows": 60,
+        "accuracy": 0.0,
+        "most_predicted": "allergy and immunology"
+      },
+      {
+        "disease": "malaria",
+        "specialty": "infectious disease",
+        "sources": "dsp+s2d",
+        "rows": 52,
+        "accuracy": 0.9808,
+        "most_predicted": "infectious disease"
+      },
+      {
+        "disease": "migraine",
+        "specialty": "neurology",
+        "sources": "dsp+s2d",
+        "rows": 57,
+        "accuracy": 0.0,
+        "most_predicted": "endocrinology"
+      },
+      {
+        "disease": "myasthenia gravis",
+        "specialty": "neurology",
+        "sources": "ddx",
+        "rows": 60,
+        "accuracy": 1.0,
+        "most_predicted": "neurology"
+      },
+      {
+        "disease": "myocarditis",
+        "specialty": "cardiology",
+        "sources": "ddx",
+        "rows": 60,
+        "accuracy": 0.9,
+        "most_predicted": "cardiology"
+      },
+      {
+        "disease": "osteoarthritis",
+        "specialty": "orthopedics",
+        "sources": "dsp",
+        "rows": 7,
+        "accuracy": 0.0,
+        "most_predicted": "rheumatology"
+      },
+      {
+        "disease": "pancreatic neoplasm",
+        "specialty": "gastroenterology",
+        "sources": "ddx",
+        "rows": 60,
+        "accuracy": 0.4167,
+        "most_predicted": "gastroenterology"
+      },
+      {
+        "disease": "paralysis (brain hemorrhage)",
+        "specialty": "neurology",
+        "sources": "dsp",
+        "rows": 5,
+        "accuracy": 0.0,
+        "most_predicted": "infectious disease"
+      },
+      {
+        "disease": "paroxysmal positional vertigo",
+        "specialty": "otolaryngology",
+        "sources": "dsp",
+        "rows": 7,
+        "accuracy": 0.0,
+        "most_predicted": "infectious disease"
+      },
+      {
+        "disease": "peptic ulcer disease",
+        "specialty": "gastroenterology",
+        "sources": "dsp+s2d",
+        "rows": 57,
+        "accuracy": 0.5965,
+        "most_predicted": "gastroenterology"
+      },
+      {
+        "disease": "pericarditis",
+        "specialty": "cardiology",
+        "sources": "ddx",
+        "rows": 60,
+        "accuracy": 0.7333,
+        "most_predicted": "cardiology"
+      },
+      {
+        "disease": "pneumonia",
+        "specialty": "pulmonology",
+        "sources": "ddx+dsp+s2d",
+        "rows": 116,
+        "accuracy": 0.5259,
+        "most_predicted": "pulmonology"
+      },
+      {
+        "disease": "psoriasis",
+        "specialty": "dermatology",
+        "sources": "dsp+s2d",
+        "rows": 57,
+        "accuracy": 0.5263,
+        "most_predicted": "dermatology"
+      },
+      {
+        "disease": "psvt",
+        "specialty": "cardiology",
+        "sources": "ddx",
+        "rows": 60,
+        "accuracy": 0.75,
+        "most_predicted": "cardiology"
+      },
+      {
+        "disease": "pulmonary embolism",
+        "specialty": "pulmonology",
+        "sources": "ddx",
+        "rows": 60,
+        "accuracy": 0.1333,
+        "most_predicted": "cardiology"
+      },
+      {
+        "disease": "pulmonary neoplasm",
+        "specialty": "pulmonology",
+        "sources": "ddx",
+        "rows": 59,
+        "accuracy": 0.9831,
+        "most_predicted": "pulmonology"
+      },
+      {
+        "disease": "sarcoidosis",
+        "specialty": "pulmonology",
+        "sources": "ddx",
+        "rows": 60,
+        "accuracy": 0.05,
+        "most_predicted": "rheumatology"
+      },
+      {
+        "disease": "scombroid food poisoning",
+        "specialty": "internal medicine",
+        "sources": "ddx",
+        "rows": 60,
+        "accuracy": 0.0,
+        "most_predicted": "allergy and immunology"
+      },
+      {
+        "disease": "sle",
+        "specialty": "rheumatology",
+        "sources": "ddx",
+        "rows": 60,
+        "accuracy": 0.0,
+        "most_predicted": "internal medicine"
+      },
+      {
+        "disease": "spontaneous pneumothorax",
+        "specialty": "pulmonology",
+        "sources": "ddx",
+        "rows": 60,
+        "accuracy": 0.0,
+        "most_predicted": "cardiology"
+      },
+      {
+        "disease": "spontaneous rib fracture",
+        "specialty": "orthopedics",
+        "sources": "ddx",
+        "rows": 60,
+        "accuracy": 0.0,
+        "most_predicted": "pulmonology"
+      },
+      {
+        "disease": "stable angina",
+        "specialty": "cardiology",
+        "sources": "ddx",
+        "rows": 60,
+        "accuracy": 1.0,
+        "most_predicted": "cardiology"
+      },
+      {
+        "disease": "tuberculosis",
+        "specialty": "pulmonology",
+        "sources": "ddx+dsp",
+        "rows": 23,
+        "accuracy": 1.0,
+        "most_predicted": "pulmonology"
+      },
+      {
+        "disease": "typhoid",
+        "specialty": "infectious disease",
+        "sources": "dsp+s2d",
+        "rows": 59,
+        "accuracy": 0.6441,
+        "most_predicted": "infectious disease"
+      },
+      {
+        "disease": "unstable angina",
+        "specialty": "cardiology",
+        "sources": "ddx",
+        "rows": 60,
+        "accuracy": 1.0,
+        "most_predicted": "cardiology"
+      },
+      {
+        "disease": "viral pharyngitis",
+        "specialty": "otolaryngology",
+        "sources": "ddx",
+        "rows": 60,
+        "accuracy": 1.0,
+        "most_predicted": "otolaryngology"
+      },
+      {
+        "disease": "whooping cough",
+        "specialty": "infectious disease",
+        "sources": "ddx",
+        "rows": 5,
+        "accuracy": 0.0,
+        "most_predicted": "orthopedics"
+      }
+    ],
+    "ddxplus_effect_on_kaggle_rows": {
+      "diseases": 35,
+      "rows": 1180,
+      "accuracy_without_ddxplus": 0.478,
+      "accuracy_with_ddxplus": 0.4644
+    }
+  },
+  "short_inputs": {
+    "rows": 63,
+    "rules_accuracy": 0.7778,
+    "model_accuracy": 0.5556,
+    "system_accuracy": 0.8889,
+    "system_misses": [
+      {
+        "text": "yellow skin and dark urine",
+        "predicted": "dermatology",
+        "acceptable": "gastroenterology"
+      },
+      {
+        "text": "fever",
+        "predicted": "otolaryngology",
+        "acceptable": "internal medicine|infectious disease"
+      },
+      {
+        "text": "high blood pressure",
+        "predicted": "internal medicine",
+        "acceptable": "cardiology"
+      },
+      {
+        "text": "excessive thirst and frequent urination",
+        "predicted": "urology",
+        "acceptable": "endocrinology"
+      },
+      {
+        "text": "weight loss",
+        "predicted": "gastroenterology",
+        "acceptable": "endocrinology|internal medicine"
+      },
+      {
+        "text": "swollen painful joints in the morning",
+        "predicted": "orthopedics",
+        "acceptable": "rheumatology"
+      },
+      {
+        "text": "hives after eating peanuts",
+        "predicted": "gastroenterology",
+        "acceptable": "allergy and immunology|dermatology"
+      }
+    ],
+    "risk_levels": {
+      "LOW": 19,
+      "MODERATE": 44,
+      "HIGH": 0,
+      "CRITICAL": 0
+    },
+    "flagged_urgent": []
+  },
+  "risk": {
+    "test_rows": 2169,
+    "label_counts": {
+      "LOW": 151,
+      "MODERATE": 1000,
+      "HIGH": 810,
+      "CRITICAL": 208
+    },
+    "rules_baseline": {
+      "accuracy": 0.468,
+      "macro_f1": 0.4394,
+      "recall_per_class": {
+        "LOW": 0.6954,
+        "MODERATE": 0.463,
+        "HIGH": 0.3358,
+        "CRITICAL": 0.8413
+      },
+      "urgent_recall": 0.6798,
+      "over_triage_rate": 0.2502
+    },
+    "model": {
+      "accuracy": 0.8981,
+      "macro_f1": 0.88,
+      "recall_per_class": {
+        "LOW": 0.9536,
+        "MODERATE": 0.902,
+        "HIGH": 0.8667,
+        "CRITICAL": 0.9615
+      },
+      "urgent_recall": 0.9155,
+      "over_triage_rate": 0.0573
+    },
+    "full_system": {
+      "accuracy": 0.6971,
+      "macro_f1": 0.6674,
+      "recall_per_class": {
+        "LOW": 0.6556,
+        "MODERATE": 0.697,
+        "HIGH": 0.6321,
+        "CRITICAL": 0.9808
+      },
+      "urgent_recall": 0.9361,
+      "over_triage_rate": 0.2754
+    },
+    "emergencies_without_red_flag": {
+      "ml_may_declare_emergency": true,
+      "true_critical_requests": 208,
+      "caught_by_rules_alone": 175,
+      "caught_with_model": 204,
+      "model_only_emergencies": 29,
+      "model_false_emergencies": 0,
+      "model_false_emergencies_by_true_label": {
+        "LOW": 0,
+        "MODERATE": 0,
+        "HIGH": 0
+      },
+      "red_flag_emergencies": 634,
+      "red_flag_emergencies_not_truly_critical": 459
+    },
+    "top_features": {
+      "severity_level": 0.0647,
+      "specialty:cardiology": 0.0471,
+      "specialty:dermatology": 0.0414,
+      "duration_days": 0.034,
+      "specialty:infectious disease": 0.0338,
+      "specialty:neurology": 0.0337,
+      "specialty:otolaryngology": 0.0324,
+      "specialty:psychiatry": 0.0321,
+      "specialty:internal medicine": 0.0307,
+      "specialty:allergy and immunology": 0.0294,
+      "specialty:gastroenterology": 0.0294,
+      "specialty:pulmonology": 0.0292,
+      "specialty:general surgery": 0.0287,
+      "has:breathlessness": 0.0284,
+      "weight_sum": 0.0282
+    }
+  }
+}

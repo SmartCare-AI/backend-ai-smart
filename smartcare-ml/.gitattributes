@@ -1,0 +1,3 @@
+# The server is Linux: shell scripts must keep LF endings even when committed from Windows.
+*.sh text eol=lf
+*.joblib binary

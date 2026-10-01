@@ -1,0 +1,12 @@
+# virtual environment
+.venv/
+
+# downloaded datasets and derived splits (rebuild with download_data + prepare)
+data/raw/
+data/processed/
+
+# python
+__pycache__/
+*.pyc
+.pytest_cache/
+.ipynb_checkpoints/

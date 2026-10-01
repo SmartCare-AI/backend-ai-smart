@@ -1,0 +1,108 @@
+[
+  {
+    "label": "Chest pain",
+    "specialty": "cardiology",
+    "keywords": [
+      "chest pain",
+      "chest tightness",
+      "pressure in chest",
+      "الم في الصدر",
+      "ألم في الصدر",
+      "ضيق في الصدر"
+    ]
+  },
+  {
+    "label": "Difficulty breathing",
+    "specialty": "pulmonology",
+    "keywords": [
+      "can't breathe",
+      "cannot breathe",
+      "shortness of breath",
+      "difficulty breathing",
+      "ضيق تنفس",
+      "ضيق في التنفس",
+      "صعوبة في التنفس"
+    ]
+  },
+  {
+    "label": "Severe bleeding",
+    "specialty": "emergency medicine",
+    "keywords": [
+      "severe bleeding",
+      "bleeding a lot",
+      "blood loss",
+      "نزيف شديد",
+      "نزيف حاد"
+    ]
+  },
+  {
+    "label": "Loss of consciousness",
+    "specialty": "emergency medicine",
+    "keywords": [
+      "unconscious",
+      "fainted",
+      "passed out",
+      "اغمي",
+      "أغمي",
+      "فقدان الوعي",
+      "إغماء"
+    ]
+  },
+  {
+    "label": "Possible stroke",
+    "specialty": "neurology",
+    "keywords": [
+      "face drooping",
+      "slurred speech",
+      "sudden numbness",
+      "numb on one side",
+      "weakness on one side",
+      "weakness of one body side",
+      "تنميل مفاجئ",
+      "ضعف في جانب واحد",
+      "اعوجاج الوجه",
+      "تلعثم"
+    ]
+  },
+  {
+    "label": "Seizure",
+    "specialty": "neurology",
+    "keywords": ["seizure", "convulsion", "تشنج", "نوبة صرع"]
+  },
+  {
+    "label": "Coughing blood",
+    "specialty": "pulmonology",
+    "keywords": [
+      "coughing blood",
+      "coughing up blood",
+      "vomiting blood",
+      "كحة بدم",
+      "قيء دم",
+      "سعال بدم"
+    ]
+  },
+  {
+    "label": "Severe allergic reaction",
+    "specialty": "allergy and immunology",
+    "keywords": [
+      "anaphylaxis",
+      "throat swelling",
+      "swollen throat",
+      "severe allergic",
+      "حساسية شديدة",
+      "تورم الحلق"
+    ]
+  },
+  {
+    "label": "Suicidal thoughts",
+    "specialty": "psychiatry",
+    "keywords": [
+      "suicidal",
+      "want to die",
+      "kill myself",
+      "انتحار",
+      "اريد ان اموت",
+      "أريد أن أموت"
+    ]
+  }
+]

@@ -1,0 +1,64 @@
+text,acceptable
+cough,pulmonology
+dry cough for a week,pulmonology
+wheezing and coughing at night,pulmonology
+coughing up phlegm,pulmonology
+headache,neurology
+migraine,neurology
+dizziness,neurology|otolaryngology
+numbness in my hand,neurology
+skin rash,dermatology
+itching,dermatology|allergy and immunology
+acne,dermatology
+dry scaly skin,dermatology
+stomach pain,gastroenterology
+nausea and vomiting,gastroenterology
+diarrhea,gastroenterology
+constipation,gastroenterology
+heartburn,gastroenterology
+yellow skin and dark urine,gastroenterology
+knee pain,orthopedics|rheumatology
+back pain,orthopedics
+joint pain,rheumatology|orthopedics
+neck pain,orthopedics
+shoulder pain,orthopedics
+burning urination,urology
+blood in urine,urology
+frequent urination at night,urology|endocrinology
+fever,internal medicine|infectious disease
+high fever and chills,infectious disease|internal medicine
+runny nose and sneezing,internal medicine|allergy and immunology|otolaryngology
+sore throat,otolaryngology|internal medicine
+ear pain,otolaryngology
+blocked nose and sinus pressure,otolaryngology|internal medicine
+blurry vision,ophthalmology
+eye redness,ophthalmology
+palpitations,cardiology
+high blood pressure,cardiology
+anxiety and panic,psychiatry
+feeling depressed,psychiatry
+fatigue,internal medicine|endocrinology
+excessive thirst and frequent urination,endocrinology
+weight loss,endocrinology|internal medicine
+swollen legs with visible veins,vascular surgery
+pain during bowel movements,general surgery|gastroenterology
+bleeding from the anus,general surgery|gastroenterology
+swollen painful joints in the morning,rheumatology
+hives after eating peanuts,allergy and immunology|dermatology
+thyroid swelling,endocrinology
+طفح جلدي وحكة,dermatology
+صداع ودوخة,neurology
+حرقان في البول,urology
+كحة وبلغم,pulmonology
+وجع في البطن واسهال,gastroenterology
+سخونية وقشعريرة,infectious disease|internal medicine
+الم في الركبة,orthopedics|rheumatology
+وجع في الضهر,orthopedics
+غثيان وترجيع,gastroenterology
+خفقان,cardiology
+حب الشباب,dermatology
+زغللة,ophthalmology
+قلق وتوتر,psychiatry
+رشح وعطس,internal medicine|allergy and immunology|otolaryngology
+امساك,gastroenterology
+الم في الاذن,otolaryngology

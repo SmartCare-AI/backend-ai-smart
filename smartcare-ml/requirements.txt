@@ -1,0 +1,8 @@
+# Runtime dependencies of the service (what the VPS needs). Python >= 3.11.
+# scikit-learn is pinned exactly: models/*.joblib are tied to the version
+# that trained them. Retrain after changing it.
+fastapi==0.142.2
+uvicorn[standard]==0.54.0
+scikit-learn==1.9.1
+joblib==1.6.0
+numpy>=2.0,<3

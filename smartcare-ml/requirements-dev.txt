@@ -1,0 +1,11 @@
+# Training, evaluation, tests and the exploration notebook.
+# The production server only needs requirements.txt.
+-r requirements.txt
+pandas
+matplotlib
+pytest
+httpx
+notebook
+nbconvert
+# Optional, only for src/experiment_embeddings.py (~1 GB with PyTorch):
+# sentence-transformers

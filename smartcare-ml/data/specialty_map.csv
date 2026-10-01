@@ -1,0 +1,84 @@
+disease,specialty,acuity,icd10,basis,note
+acne,dermatology,LOW,L70,reviewed,
+psoriasis,dermatology,LOW,L40,reviewed,chronic but routine outpatient care
+fungal infection,dermatology,LOW,B35,reviewed,
+impetigo,dermatology,MODERATE,L01,reviewed,contagious bacterial infection that needs treatment
+chicken pox,infectious disease,MODERATE,B01,reviewed,
+dengue,infectious disease,HIGH,A90,reviewed,
+malaria,infectious disease,HIGH,B54,reviewed,
+typhoid,infectious disease,HIGH,A01.0,reviewed,
+hiv / aids,infectious disease,HIGH,B20,reviewed,DDXPlus rates initial HIV infection 3; kept HIGH for the AIDS presentation in the Kaggle data
+common cold,internal medicine,LOW,J00,reviewed,includes DDXPlus URTI (J06.9; severity 5)
+allergy,allergy and immunology,LOW,T78.4,reviewed,non-anaphylactic allergy
+drug reaction,allergy and immunology,HIGH,T88.7,reviewed,can progress; the drug must be reviewed promptly
+bronchial asthma,pulmonology,MODERATE,J45,reviewed,includes DDXPlus acute asthma exacerbation (severity 3)
+pneumonia,pulmonology,HIGH,J18,reviewed,DDXPlus rates it 3; kept HIGH
+tuberculosis,pulmonology,HIGH,A15,reviewed,DDXPlus rates it 3; kept HIGH (infectious; needs prompt treatment)
+hypertension,cardiology,MODERATE,I10,reviewed,
+heart attack,cardiology,CRITICAL,I21,reviewed,includes DDXPlus possible NSTEMI / STEMI (severity 1)
+varicose veins,vascular surgery,LOW,I83,reviewed,
+migraine,neurology,MODERATE,G43,reviewed,
+paralysis (brain hemorrhage),neurology,CRITICAL,I61,reviewed,
+paroxysmal positional vertigo,otolaryngology,MODERATE,H81.1,reviewed,changed from neurology: an inner-ear disorder (ICD-10 chapter VIII) treated by repositioning manoeuvres
+arthritis,rheumatology,MODERATE,M13.9,reviewed,
+osteoarthritis,orthopedics,MODERATE,M19.9,reviewed,
+cervical spondylosis,orthopedics,MODERATE,M47.8,reviewed,
+diabetes,endocrinology,MODERATE,E11,reviewed,
+hyperthyroidism,endocrinology,MODERATE,E05,reviewed,
+hypothyroidism,endocrinology,MODERATE,E03.9,reviewed,
+hypoglycemia,endocrinology,HIGH,E16.2,reviewed,
+gastroesophageal reflux disease,gastroenterology,LOW,K21,reviewed,DDXPlus rates GERD 3; kept LOW
+peptic ulcer disease,gastroenterology,MODERATE,K27,reviewed,
+gastroenteritis,gastroenterology,MODERATE,A09,reviewed,
+jaundice,gastroenterology,HIGH,R17,reviewed,a sign that needs prompt investigation
+chronic cholestasis,gastroenterology,MODERATE,K83.1,reviewed,
+alcoholic hepatitis,gastroenterology,HIGH,K70.1,reviewed,
+hepatitis a,gastroenterology,MODERATE,B15,reviewed,hepatology is part of gastroenterology
+hepatitis b,gastroenterology,HIGH,B16,reviewed,
+hepatitis c,gastroenterology,MODERATE,B17.1,reviewed,changed from HIGH: the dataset rows describe a chronic non-acute picture
+hepatitis d,gastroenterology,HIGH,B17.0,reviewed,
+hepatitis e,gastroenterology,HIGH,B17.2,reviewed,usually self-limiting but the dataset rows include liver failure signs
+hemorrhoids,general surgery,MODERATE,K64,reviewed,rectal bleeding should be examined
+urinary tract infection,urology,MODERATE,N39.0,reviewed,
+anaphylaxis,allergy and immunology,CRITICAL,T78.0,DDXPlus severity 1,
+laryngospasm,otolaryngology,CRITICAL,J38.5,DDXPlus severity 1,
+ebola,infectious disease,CRITICAL,A98.4,DDXPlus severity 1,
+acute pulmonary edema,cardiology,CRITICAL,J81.0,DDXPlus severity 1,
+pulmonary embolism,pulmonology,CRITICAL,I26,DDXPlus severity 2 - raised,NHS: can be life-threatening if not treated quickly; call 999 for severe breathing difficulty or chest pain
+epiglottitis,otolaryngology,CRITICAL,J05.1,DDXPlus severity 2 - raised,NHS: a medical emergency; call 999
+unstable angina,cardiology,CRITICAL,I20.0,DDXPlus severity 2 - raised,part of acute coronary syndrome; a medical emergency (StatPearls)
+boerhaave,general surgery,CRITICAL,K22.3,DDXPlus severity 2 - raised,oesophageal rupture; a surgical emergency (StatPearls)
+spontaneous pneumothorax,pulmonology,HIGH,J93,DDXPlus severity 2,
+guillain-barre syndrome,neurology,HIGH,G61.0,DDXPlus severity 2,
+croup,otolaryngology,HIGH,J05.0,DDXPlus severity 2,a childhood illness; no paediatrics class in this table
+psvt,cardiology,HIGH,I47.1,DDXPlus severity 2,
+scombroid food poisoning,internal medicine,HIGH,T61.1,DDXPlus severity 2,
+myocarditis,cardiology,HIGH,I51.4,DDXPlus severity 2,
+acute dystonic reactions,neurology,HIGH,G24.02,DDXPlus severity 2,
+stable angina,cardiology,HIGH,I20.9,DDXPlus severity 2,
+cluster headache,neurology,MODERATE,G44.009,DDXPlus severity 3,
+spontaneous rib fracture,orthopedics,MODERATE,S22.9,DDXPlus severity 3,
+inguinal hernia,general surgery,MODERATE,K40,DDXPlus severity 3,
+myasthenia gravis,neurology,MODERATE,G70.0,DDXPlus severity 3,
+atrial fibrillation,cardiology,MODERATE,I48.91,DDXPlus severity 3,
+bronchiectasis,pulmonology,MODERATE,J47,DDXPlus severity 3,
+chagas,infectious disease,MODERATE,B57,DDXPlus severity 3,
+acute copd exacerbation / infection,pulmonology,MODERATE,J44.1,DDXPlus severity 3,
+influenza,internal medicine,MODERATE,J11.1,DDXPlus severity 3,
+bronchiolitis,pulmonology,MODERATE,J21,DDXPlus severity 3,an infant illness; no paediatrics class in this table
+pulmonary neoplasm,pulmonology,MODERATE,C34,DDXPlus severity 3,
+pancreatic neoplasm,gastroenterology,MODERATE,C25,DDXPlus severity 3,
+anemia,hematology,MODERATE,D64.9,DDXPlus severity 4,
+whooping cough,infectious disease,MODERATE,A37,DDXPlus severity 4,
+localized edema,internal medicine,MODERATE,R60.0,DDXPlus severity 4,
+sle,rheumatology,MODERATE,M32,DDXPlus severity 4,
+acute otitis media,otolaryngology,MODERATE,H66.90,DDXPlus severity 4,
+bronchitis,pulmonology,MODERATE,J40,DDXPlus severity 4,
+sarcoidosis,pulmonology,MODERATE,D86,DDXPlus severity 4,most often affects the lungs
+pericarditis,cardiology,MODERATE,I30,DDXPlus severity 4,
+viral pharyngitis,otolaryngology,LOW,J02.9,DDXPlus severity 4 - lowered,NHS: sore throats normally get better by themselves within a week
+acute laryngitis,otolaryngology,LOW,J04.0,DDXPlus severity 4 - lowered,NHS: usually goes away by itself within 1 to 2 weeks
+acute rhinosinusitis,otolaryngology,LOW,J01,DDXPlus severity 4 - lowered,NHS: sinusitis usually clears up on its own within 4 weeks
+allergic sinusitis,allergy and immunology,LOW,J30,DDXPlus severity 4 - lowered,same level as allergy above
+panic attack,psychiatry,LOW,F41,DDXPlus severity 5,
+chronic rhinosinusitis,otolaryngology,LOW,J32,DDXPlus severity 5,

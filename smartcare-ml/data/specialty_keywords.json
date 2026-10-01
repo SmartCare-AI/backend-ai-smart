@@ -1,0 +1,88 @@
+[
+  {
+    "specialty": "cardiology",
+    "keywords": ["chest", "heart", "palpitation", "قلب", "صدر", "خفقان"]
+  },
+  {
+    "specialty": "pulmonology",
+    "keywords": ["breath", "cough", "wheez", "asthma", "تنفس", "كحة", "سعال", "ربو"]
+  },
+  {
+    "specialty": "neurology",
+    "keywords": [
+      "headache",
+      "migraine",
+      "dizz",
+      "numb",
+      "seizure",
+      "memory",
+      "صداع",
+      "دوخة",
+      "دوار",
+      "تنميل",
+      "شقيقة"
+    ]
+  },
+  {
+    "specialty": "gastroenterology",
+    "keywords": [
+      "stomach",
+      "abdom",
+      "nausea",
+      "vomit",
+      "diarrhea",
+      "constipation",
+      "heartburn",
+      "معدة",
+      "بطن",
+      "غثيان",
+      "قيء",
+      "اسهال",
+      "إسهال",
+      "امساك",
+      "إمساك",
+      "حرقان"
+    ]
+  },
+  {
+    "specialty": "dermatology",
+    "keywords": ["rash", "skin", "itch", "acne", "eczema", "جلد", "طفح", "حكة", "حبوب"]
+  },
+  {
+    "specialty": "orthopedics",
+    "keywords": [
+      "joint",
+      "knee",
+      "back pain",
+      "bone",
+      "fracture",
+      "shoulder",
+      "مفصل",
+      "ركبة",
+      "ظهر",
+      "عظم",
+      "كسر",
+      "كتف"
+    ]
+  },
+  {
+    "specialty": "urology",
+    "keywords": ["urin", "kidney", "bladder", "بول", "كلى", "مثانة"]
+  },
+  {
+    "specialty": "ophthalmology",
+    "keywords": ["eye", "vision", "blurry", "عين", "نظر", "رؤية"]
+  },
+  {
+    "specialty": "otolaryngology",
+    "keywords": ["ear", "throat", "sinus", "nose", "اذن", "أذن", "حلق", "جيوب", "انف", "أنف"]
+  },
+  {
+    "specialty": "endocrinology",
+    "keywords": ["diabetes", "thyroid", "blood sugar", "سكر", "سكري", "غدة"]
+  },
+  {
+    "specialty": "psychiatry",
+    "keywords": ["anxiety", "depress", "panic", "قلق", "اكتئاب", "توتر"]
+  }
+]
