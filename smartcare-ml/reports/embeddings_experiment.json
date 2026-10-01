@@ -1,0 +1,36 @@
+{
+  "embedding_model": "paraphrase-multilingual-MiniLM-L12-v2",
+  "embedding_dimensions": 384,
+  "encode_seconds_for_all_rows": 75.1,
+  "encode_ms_per_request_cpu": 15.3,
+  "short_inputs": {
+    "rows": 63,
+    "arabic_rows": 16
+  },
+  "tfidf": {
+    "test_accuracy": 0.9962,
+    "test_macro_f1": 0.9915,
+    "test_accuracy_by_source": {
+      "ddx": 0.998,
+      "dsp": 1.0,
+      "s2d": 0.9913
+    },
+    "short_inputs_accuracy": 0.5556,
+    "short_inputs_english": 0.5745,
+    "short_inputs_arabic": 0.5,
+    "unseen_disease_accuracy": 0.4951
+  },
+  "embeddings": {
+    "test_accuracy": 0.9771,
+    "test_macro_f1": 0.9827,
+    "test_accuracy_by_source": {
+      "ddx": 0.9919,
+      "dsp": 0.9508,
+      "s2d": 0.9524
+    },
+    "short_inputs_accuracy": 0.4921,
+    "short_inputs_english": 0.5745,
+    "short_inputs_arabic": 0.25,
+    "unseen_disease_accuracy": 0.4408
+  }
+}

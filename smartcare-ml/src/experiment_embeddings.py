@@ -117,6 +117,13 @@ def main() -> None:
     def row(title: str, key: str) -> str:
         return f"| {title} | {t[key]:.1%} | {e[key]:.1%} |"
 
+    measures = {
+        "test_accuracy": "held-out accuracy",
+        "unseen_disease_accuracy": "never-seen diseases",
+        "short_inputs_english": "short English inputs",
+        "short_inputs_arabic": "short Arabic inputs",
+    }
+    wins = [name for key, name in measures.items() if e[key] > t[key]]
     by_source = "\n".join(
         f"| Held-out test rows — `{s}` | {t['test_accuracy_by_source'][s]:.1%} | {e['test_accuracy_by_source'][s]:.1%} |"
         for s in t["test_accuracy_by_source"]
@@ -137,10 +144,12 @@ Both columns are the **specialty model alone** — no keyword rules, no safety l
 {row('…English', 'short_inputs_english')}
 {row(f"…Arabic ({results['short_inputs']['arabic_rows']} rows; TF-IDF sees the dictionary translation, embeddings the raw Arabic)", 'short_inputs_arabic')}
 
+**Embeddings scored higher on: {', '.join(wins) or 'none of these measures'}.**
+
 Cost of the embeddings column: PyTorch and a ~470 MB model on the server, and
-about {results['encode_ms_per_request_cpu']:.0f} ms of CPU per request to encode the text (measured here; TF-IDF takes
-about 1 ms). It also loses the per-word explanation ("key terms") that the
-linear TF-IDF model gives for free.
+about {results['encode_ms_per_request_cpu']:.0f} ms of CPU per request to encode the text (measured here). It
+also loses the per-word explanation ("key terms") that the linear TF-IDF model
+gives for free.
 """
     (REPORTS / "embeddings_experiment.md").write_text(markdown, encoding="utf-8")
     print(json.dumps(results, indent=2))

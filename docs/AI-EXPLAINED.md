@@ -583,6 +583,28 @@ Of the 2,169 test requests, 208 are truly life-threatening (CRITICAL):
 The 29 cases the model added are the argument for letting it declare
 emergencies. Four truly critical cases are still not reported as CRITICAL.
 
+### An experiment that did not win
+
+The plan's stretch goal was to replace TF-IDF with **sentence embeddings**: a
+pretrained neural network (`paraphrase-multilingual-MiniLM-L12-v2`) that turns
+a whole sentence, in any of 50+ languages, into 384 numbers that capture its
+meaning. In theory that should help with Arabic and with wording the model
+has not seen. We kept the same classifier and the same data and compared
+(`reports/embeddings_experiment.md`):
+
+| Specialty model alone | TF-IDF (what we use) | Sentence embeddings |
+|---|---|---|
+| Held-out test rows | **99.6%** | 97.7% |
+| …real patient wording (Symptom2Disease) | **99.1%** | 95.2% |
+| Never-seen diseases | **49.5%** | 44.1% |
+| Short English inputs | 57.5% | 57.5% |
+| Short Arabic inputs (16 rows) | **50.0%** (via our dictionary) | 25.0% (raw Arabic) |
+
+It was not better on any measure, and it would cost a ~470 MB model plus
+PyTorch on the server and the loss of the per-word explanations. So the
+service keeps TF-IDF. This is a useful result to present: the simpler,
+explainable model was chosen by measurement, not by default.
+
 ---
 
 ## 10. Limitations — say these yourself
@@ -622,7 +644,7 @@ diseases per specialty; a proper Arabic model.
 | A separate Python service instead of ML inside NestJS | scikit-learn is a Python library. A tiny HTTP service with one endpoint keeps the back-end untouched and the two parts independently deployable. |
 | Strategy pattern + fallback in NestJS | The AI can be switched on, off, or replaced by configuration; an AI outage can never break triage. |
 | Rules wrap the models | Emergencies must not depend on statistics. Rules are auditable line by line. |
-| TF-IDF + logistic regression for specialty | The simplest model that works on text, and its weights are readable. |
+| TF-IDF + logistic regression for specialty | The simplest model that works on text, and its weights are readable. A neural sentence-embedding model was tested and scored lower. |
 | Random forest for risk | Works well on mixed tabular features without tuning. |
 | Two models chained | Body system (model 1's output) is a strong signal for urgency (model 2). |
 | Predict specialty and urgency, never a disease | Keeps the system assistive, not diagnostic. |
@@ -648,8 +670,9 @@ a classical model is the right tool.
 **"Why not deep learning?"**
 With about 4,000 examples, a neural network would overfit and would not be
 explainable. Logistic regression on TF-IDF already reaches 99% on held-out
-data. A pretrained multilingual sentence-embedding model is the natural next
-step; the comparison script is `src/experiment_embeddings.py`.
+data. We also tested the obvious deep-learning alternative — a pretrained
+multilingual sentence-embedding model — and it did not do better (see "An
+experiment that did not win" in section 9).
 
 **"99.6% is suspiciously high. Is it real?"**
 It is real for what it measures: new descriptions of diseases the model was

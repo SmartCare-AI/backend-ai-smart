@@ -191,7 +191,7 @@ service is internal-only (never exposed publicly).
 | 6 (2 days) | FastAPI `/triage` + pydantic models matching the NestJS contract | FastAPI, pydantic validation **[LEARN: fastapi.tiangolo.com/tutorial]** |
 | 7 (1 day) | Arabic dictionary pass + end-to-end test through NestJS Swagger | integration testing |
 | 8 (1 day) | Deploy on VPS with PM2, set `AI_SERVICE_URL`, demo | uvicorn, process management |
-| Stretch | Multilingual embeddings; retrain script + model versioning | sentence-transformers |
+| Stretch | Multilingual embeddings — tested, scored below TF-IDF, not adopted (`smartcare-ml/reports/embeddings_experiment.md`); retrain script + model versioning | sentence-transformers |
 
 ## 8. Defense talking points
 
