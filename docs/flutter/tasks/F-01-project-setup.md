@@ -49,5 +49,5 @@ Run with `flutter run --dart-define-from-file=config/dev.json`.
 
 ## Gotchas
 - The Android emulator cannot see `localhost`; it is `10.0.2.2`. The iOS simulator can.
-- If the backend runs on another machine on your Wi-Fi, use its LAN IP and make
-  sure the backend `CORS_ORIGINS` allows it.
+- If the backend runs on another machine on your Wi-Fi, use its LAN IP. The
+  backend allows every CORS origin, so no backend change is needed.

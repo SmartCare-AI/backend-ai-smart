@@ -25,8 +25,8 @@ release builds break in ways debug builds never do.
 - [ ] `flutter build web --release --dart-define-from-file=config/prod.json`
 - [ ] Deploy the web build — Firebase Hosting or a static path behind the existing
       nginx. Coordinate with whoever owns `artsoraback.tech`.
-- [ ] Verify the backend `CORS_ORIGINS` includes the web build's origin, or every
-      request from the dashboard will fail
+- [ ] Verify the deployed web build can call the API (the backend currently
+      allows every CORS origin, so no origin list needs updating)
 - [ ] Release notes and an install guide for the examiners
 
 ## Acceptance criteria
@@ -43,7 +43,7 @@ release builds break in ways debug builds never do.
 - **Firebase release SHA-1 is the classic week-6 disaster.** Debug and release
   builds have different signing certificates; both must be registered or Google
   sign-in and sometimes FCM fail only in release.
-- Flutter web needs CORS from the backend. Add the hosting origin to
-  `CORS_ORIGINS` before you test, not after.
+- Flutter web needs CORS from the backend. It is open to every origin for now;
+  if it is ever restricted, add the hosting origin before you test, not after.
 - Flutter web's first load is slow. Enable the service worker and warn the
   examiners rather than looking like the app hung.

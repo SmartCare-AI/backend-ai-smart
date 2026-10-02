@@ -18,10 +18,9 @@ async function bootstrap() {
   app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
   // Behind nginx: use X-Forwarded-For so rate limiting sees the real client IP.
   app.set('trust proxy', 1);
-  app.enableCors({
-    origin: config.get<string>('CORS_ORIGINS')?.split(',') ?? true,
-    credentials: true,
-  });
+  // CORS open to every origin for now (graduation project; Flutter web runs
+  // on a random localhost port). Restrict to known origins before going public.
+  app.enableCors({ origin: true, credentials: true });
 
   // --- Validation: strip unknown fields, reject extras, auto-transform ---
   app.useGlobalPipes(
