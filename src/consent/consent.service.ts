@@ -90,9 +90,12 @@ export class ConsentService {
   ): Promise<boolean> {
     const relationship = await this.prisma.careRelationship.findFirst({
       where: {
-        patientId: patientProfileId,
-        doctor: { userId: doctorUserId },
-        ...this.activeRelationshipWhere(),
+        // AND keeps both `doctor` filters: spreading the active-relationship
+        // filter next to `doctor: { userId }` would overwrite one of them.
+        AND: [
+          { patientId: patientProfileId, doctor: { userId: doctorUserId } },
+          this.activeRelationshipWhere(),
+        ],
       },
       select: { id: true },
     });
