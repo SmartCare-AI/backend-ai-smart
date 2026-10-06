@@ -231,9 +231,8 @@ describe('Phase 1 — doctor self-registration and doctor search', () => {
       .api(admin)
       .get('/admin/doctors?status=SUSPENDED')
       .expect(200);
-    expect(listed.body.items.map((d: { id: number }) => d.id)).toContain(
-      doctor.profile.id,
-    );
+    const ids = (listed.body.items as { id: number }[]).map((d) => d.id);
+    expect(ids).toContain(doctor.profile.id);
 
     await ctx
       .api(admin)

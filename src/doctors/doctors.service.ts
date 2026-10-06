@@ -171,7 +171,11 @@ export class DoctorsService {
   async becomeDoctor(userId: number, dto: BecomeDoctorDto) {
     const user = await this.prisma.user.findUniqueOrThrow({
       where: { id: userId },
-      include: { patientProfile: true, caregiverProfile: true, doctorProfile: true },
+      include: {
+        patientProfile: true,
+        caregiverProfile: true,
+        doctorProfile: true,
+      },
     });
     if (user.doctorProfile) {
       throw new ConflictException('This account already has a doctor profile.');
@@ -238,7 +242,12 @@ export class DoctorsService {
         where,
         include: {
           user: {
-            select: { id: true, email: true, isEmailVerified: true, createdAt: true },
+            select: {
+              id: true,
+              email: true,
+              isEmailVerified: true,
+              createdAt: true,
+            },
           },
           hospital: { select: { id: true, name: true } },
         },
@@ -304,7 +313,9 @@ export class DoctorsService {
     const upcoming = await this.prisma.appointment.findMany({
       where: {
         doctorId,
-        status: { in: [AppointmentStatus.PENDING, AppointmentStatus.CONFIRMED] },
+        status: {
+          in: [AppointmentStatus.PENDING, AppointmentStatus.CONFIRMED],
+        },
         startTime: { gt: new Date() },
       },
       select: {

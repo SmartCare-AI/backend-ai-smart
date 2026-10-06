@@ -201,7 +201,9 @@ export class AlertsService {
     // Only a treating doctor (or admin) manages alert lifecycle.
     if (requester.role !== Role.ADMIN) {
       await this.profiles.getDoctorByUserId(requester.id);
-      if (!(await this.consent.isTreatingDoctor(requester.id, alert.patientId))) {
+      if (
+        !(await this.consent.isTreatingDoctor(requester.id, alert.patientId))
+      ) {
         throw new ForbiddenException('You are not treating this patient.');
       }
     }

@@ -69,7 +69,10 @@ export class ConsentService {
         userId: doctorUserId,
         status: ProfileStatus.ACTIVE,
         appointments: {
-          some: { patientId: patientProfileId, ...this.treatingAppointmentWhere() },
+          some: {
+            patientId: patientProfileId,
+            ...this.treatingAppointmentWhere(),
+          },
         },
       },
       select: { id: true },
@@ -78,7 +81,9 @@ export class ConsentService {
   }
 
   /** Patient profile ids this doctor (by profile id) currently treats. */
-  treatedPatientsWhere(doctorProfileId: number): Prisma.PatientProfileWhereInput {
+  treatedPatientsWhere(
+    doctorProfileId: number,
+  ): Prisma.PatientProfileWhereInput {
     return {
       appointments: {
         some: { doctorId: doctorProfileId, ...this.treatingAppointmentWhere() },

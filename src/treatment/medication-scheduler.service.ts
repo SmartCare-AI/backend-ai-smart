@@ -42,10 +42,14 @@ export class MedicationSchedulerService {
   async tick() {
     try {
       // The lease also stops slow ticks on the same instance from overlapping.
-      await this.locks.runExclusive('medication-scheduler', 5 * 60_000, async () => {
-        await this.sendReminders();
-        await this.detectMissed();
-      });
+      await this.locks.runExclusive(
+        'medication-scheduler',
+        5 * 60_000,
+        async () => {
+          await this.sendReminders();
+          await this.detectMissed();
+        },
+      );
     } catch (err) {
       this.logger.error(`Scheduler tick failed: ${(err as Error).message}`);
     }

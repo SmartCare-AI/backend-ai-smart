@@ -8,15 +8,15 @@ import {
 
 describe('timezone.util', () => {
   it('converts Cairo winter time (UTC+2) to UTC', () => {
-    expect(zonedTimeToUtc(2027, 1, 15, 9, 0, 'Africa/Cairo').toISOString()).toBe(
-      '2027-01-15T07:00:00.000Z',
-    );
+    expect(
+      zonedTimeToUtc(2027, 1, 15, 9, 0, 'Africa/Cairo').toISOString(),
+    ).toBe('2027-01-15T07:00:00.000Z');
   });
 
   it('converts Cairo summer time (UTC+3, DST) to UTC', () => {
-    expect(zonedTimeToUtc(2026, 7, 15, 9, 0, 'Africa/Cairo').toISOString()).toBe(
-      '2026-07-15T06:00:00.000Z',
-    );
+    expect(
+      zonedTimeToUtc(2026, 7, 15, 9, 0, 'Africa/Cairo').toISOString(),
+    ).toBe('2026-07-15T06:00:00.000Z');
   });
 
   it('handles zones behind UTC and day overflow', () => {

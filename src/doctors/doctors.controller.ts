@@ -108,7 +108,10 @@ export class DoctorsController {
   @Public()
   @ApiOperation({ summary: 'Public doctor profile' })
   @ApiResponse({ status: 200, type: PublicDoctorEntity })
-  @ApiResponse({ status: 404, description: 'Unknown, suspended or unverified.' })
+  @ApiResponse({
+    status: 404,
+    description: 'Unknown, suspended or unverified.',
+  })
   findOne(@Param('id', ParseIntPipe) id: number) {
     return this.doctors.findPublic(id);
   }
