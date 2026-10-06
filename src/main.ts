@@ -102,6 +102,10 @@ async function bootstrap() {
       'Registration, login, email verification, password reset, social sign-in',
     )
     .addTag('Users', 'Profile management')
+    .addTag(
+      'Doctors',
+      'Doctor directory (public search), self-service doctor profile, admin suspension',
+    )
     .addTag('Hospitals', 'Hospitals & departments (admin-managed)')
     .addTag('Appointments', 'Booking, confirmation, doctor schedules')
     .addTag('Visits', 'Encounters: diagnoses, tests, results, radiology')

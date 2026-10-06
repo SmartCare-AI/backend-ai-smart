@@ -11,11 +11,11 @@ import {
   ConsentType,
   NotificationType,
   Prisma,
-  ProfileStatus,
   Role,
 } from '@prisma/client';
 import type { AuthenticatedUser } from '../common/decorators/current-user.decorator';
 import { ConsentService } from '../consent/consent.service';
+import { DoctorsService } from '../doctors/doctors.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { TelemedicineService } from '../telemedicine/telemedicine.service';
@@ -54,15 +54,12 @@ export class AppointmentsService {
       ConsentType.MANAGE_APPOINTMENTS,
     );
 
-    const doctor = await this.prisma.doctorProfile.findUnique({
-      where: { id: dto.doctorId },
-      select: { id: true, userId: true, isVerified: true, status: true },
+    // Same "listed" rule as the doctor directory (GET /doctors).
+    const doctor = await this.prisma.doctorProfile.findFirst({
+      where: { id: dto.doctorId, ...DoctorsService.listedWhere() },
+      select: { id: true, userId: true },
     });
-    if (
-      !doctor ||
-      !doctor.isVerified ||
-      doctor.status !== ProfileStatus.ACTIVE
-    ) {
+    if (!doctor) {
       throw new NotFoundException('Doctor not found or not available.');
     }
 

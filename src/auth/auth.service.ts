@@ -56,41 +56,76 @@ export class AuthService {
   // -------------------------------------------------------------------------
 
   /**
-   * Creates the account and its Patient profile. Per the ERD the account row
-   * holds no personal identity, so `firstName`/`lastName` from the request are
-   * stored on PatientProfile (#2), not on User (#1).
+   * Creates the account and the profile for the chosen account type:
+   * PATIENT (default) gets a PatientProfile with an MRN; DOCTOR gets a
+   * DoctorProfile with their professional details. Per the ERD the account
+   * row holds no personal identity, so names live on the profile.
+   *
+   * A doctor becomes searchable and bookable once the email is verified.
    */
   async register(dto: RegisterDto): Promise<{ message: string }> {
     const email = dto.email.toLowerCase();
+    const accountType = dto.accountType ?? 'PATIENT';
     const existing = await this.prisma.user.findUnique({ where: { email } });
 
     if (existing?.isEmailVerified) {
       throw new ConflictException('An account with this email already exists.');
     }
+    if (accountType === 'DOCTOR' && dto.doctor) {
+      await this.profiles.assertLicenseAvailable(
+        dto.doctor.licenseNumber,
+        existing?.id,
+      );
+      await this.profiles.assertPlacement(
+        dto.doctor.hospitalId,
+        dto.doctor.departmentId,
+      );
+    }
 
     const password = await bcrypt.hash(dto.password, BCRYPT_ROUNDS);
+    const role = accountType === 'DOCTOR' ? Role.DOCTOR : Role.PATIENT;
 
-    // Re-registering an unverified account overwrites it (the previous
-    // attempt never proved ownership of the email address).
-    const user = existing
-      ? await this.prisma.user.update({
-          where: { id: existing.id },
-          data: { password, phone: dto.phone ?? null },
-        })
-      : await this.prisma.user.create({
-          data: { email, password, phone: dto.phone ?? null },
+    const user = await this.prisma.$transaction(async (tx) => {
+      // Re-registering an unverified account starts over (the previous
+      // attempt never proved ownership of the email, so it can hold no
+      // data): drop its profiles and recreate the one asked for now.
+      const account = existing
+        ? await tx.user.update({
+            where: { id: existing.id },
+            data: { password, phone: dto.phone ?? null, role },
+          })
+        : await tx.user.create({
+            data: { email, password, phone: dto.phone ?? null, role },
+          });
+      if (existing) {
+        await tx.patientProfile.deleteMany({ where: { userId: account.id } });
+        await tx.doctorProfile.deleteMany({ where: { userId: account.id } });
+      }
+
+      if (accountType === 'DOCTOR' && dto.doctor) {
+        await tx.doctorProfile.create({
+          data: {
+            userId: account.id,
+            firstName: dto.firstName,
+            lastName: dto.lastName,
+            licenseNumber: dto.doctor.licenseNumber,
+            specialization: dto.doctor.specialization,
+            yearsOfExperience: dto.doctor.yearsOfExperience,
+            bio: dto.doctor.bio ?? null,
+            hospitalId: dto.doctor.hospitalId ?? null,
+            departmentId: dto.doctor.departmentId ?? null,
+            // Set when the email is verified (verifyEmail).
+            isVerified: false,
+          },
         });
-
-    // New accounts are patients by default — give them their medical record.
-    await this.profiles.ensurePatientProfile(user.id, {
-      firstName: dto.firstName,
-      lastName: dto.lastName,
+      }
+      return account;
     });
-    if (existing) {
-      // Keep the re-submitted name on an unverified retry.
-      await this.prisma.patientProfile.updateMany({
-        where: { userId: user.id },
-        data: { firstName: dto.firstName, lastName: dto.lastName },
+
+    if (accountType === 'PATIENT') {
+      await this.profiles.ensurePatientProfile(user.id, {
+        firstName: dto.firstName,
+        lastName: dto.lastName,
       });
     }
 
@@ -114,6 +149,12 @@ export class AuthService {
     const verified = await this.prisma.user.update({
       where: { id: user.id },
       data: { isEmailVerified: true },
+    });
+    // MVP rule: a self-registered doctor is listed once their email is
+    // proven. (GP2 replaces this with a document review.)
+    await this.prisma.doctorProfile.updateMany({
+      where: { userId: user.id, isVerified: false },
+      data: { isVerified: true },
     });
     return this.buildAuthResponse(verified);
   }

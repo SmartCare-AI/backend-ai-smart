@@ -108,7 +108,7 @@ async function main() {
       firstName: 'Ahmed',
       lastName: 'Hassan',
       licenseNumber: 'EG-MED-100001',
-      specialization: 'Cardiology',
+      specialization: 'cardiology',
       yearsOfExperience: 12,
       bio: 'Consultant cardiologist.',
       hospitalId: hospital.id,

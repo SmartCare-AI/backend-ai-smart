@@ -39,12 +39,19 @@ export class AuthController {
   @ApiOperation({
     summary: 'Register with email & password',
     description:
-      'Creates an account and emails a 6-digit verification code (valid 10 minutes). The account cannot log in until the email is verified via POST /auth/verify-email.',
+      'Creates an account and emails a 6-digit verification code (valid 10 minutes). The account cannot log in until the email is verified via POST /auth/verify-email.\n\n' +
+      '`accountType`: `PATIENT` (default) creates a patient with a medical record number. `DOCTOR` requires the `doctor` block (specialization from GET /doctors/specializations, years of experience, license number); the doctor appears in GET /doctors as soon as the email is verified.',
   })
   @ApiResponse({ status: 201, type: MessageResponseDto })
   @ApiResponse({
+    status: 400,
+    description:
+      'Validation failed (e.g. DOCTOR without `doctor`, unknown specialization, bad hospital/department).',
+  })
+  @ApiResponse({
     status: 409,
-    description: 'Email already registered and verified.',
+    description:
+      'Email already registered and verified, or license number already registered.',
   })
   register(@Body() dto: RegisterDto) {
     return this.authService.register(dto);

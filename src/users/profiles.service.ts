@@ -3,13 +3,10 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
-  NotFoundException,
 } from '@nestjs/common';
-import { DoctorProfile, PatientProfile, Role } from '@prisma/client';
+import { DoctorProfile, EntityStatus, PatientProfile } from '@prisma/client';
 import { displayName, USER_NAME_INCLUDE } from '../common/utils/user-name.util';
 import { PrismaService } from '../prisma/prisma.service';
-import { CreateDoctorProfileDto } from './dto/create-doctor-profile.dto';
-import { UserEntity } from './entities/user.entity';
 
 export interface ProfileIdentity {
   firstName: string;
@@ -89,77 +86,49 @@ export class ProfilesService {
   }
 
   /**
-   * ADMIN promotes an existing account to DOCTOR with license details.
-   * Admin-created doctors are considered license-verified.
+   * Validates the optional workplace of a doctor: the hospital must be
+   * active and the department must belong to it.
    */
-  async promoteToDoctor(
-    userId: number,
-    dto: CreateDoctorProfileDto,
-  ): Promise<UserEntity> {
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      include: {
-        patientProfile: true,
-        doctorProfile: true,
-        caregiverProfile: true,
-      },
-    });
-    if (!user) throw new NotFoundException('User not found.');
-
-    // Names live on the profile now — take them from the request, or carry
-    // over the ones already on record for this account.
-    const existingNames =
-      user.doctorProfile ?? user.patientProfile ?? user.caregiverProfile;
-    const firstName = dto.firstName ?? existingNames?.firstName;
-    const lastName = dto.lastName ?? existingNames?.lastName;
-    if (!firstName || !lastName) {
-      throw new BadRequestException(
-        'firstName and lastName are required — this account has no profile to copy them from.',
-      );
+  async assertPlacement(
+    hospitalId?: number | null,
+    departmentId?: number | null,
+  ): Promise<void> {
+    if (departmentId != null && hospitalId == null) {
+      throw new BadRequestException('departmentId requires hospitalId.');
     }
+    if (hospitalId != null) {
+      const hospital = await this.prisma.hospital.findFirst({
+        where: { id: hospitalId, status: EntityStatus.ACTIVE },
+        select: { id: true },
+      });
+      if (!hospital) throw new BadRequestException('Unknown hospitalId.');
+    }
+    if (departmentId != null) {
+      const department = await this.prisma.department.findFirst({
+        where: { id: departmentId, hospitalId: hospitalId ?? undefined },
+        select: { id: true },
+      });
+      if (!department) {
+        throw new BadRequestException(
+          'departmentId does not belong to hospitalId.',
+        );
+      }
+    }
+  }
 
-    const existingLicense = await this.prisma.doctorProfile.findUnique({
-      where: { licenseNumber: dto.licenseNumber },
+  /** 409 when the license number belongs to a different account. */
+  async assertLicenseAvailable(
+    licenseNumber: string,
+    userId?: number,
+  ): Promise<void> {
+    const owner = await this.prisma.doctorProfile.findUnique({
+      where: { licenseNumber },
       select: { userId: true },
     });
-    if (existingLicense && existingLicense.userId !== userId) {
+    if (owner && owner.userId !== userId) {
       throw new ConflictException(
         'This license number is already registered to another doctor.',
       );
     }
-
-    const profileData = {
-      firstName,
-      lastName,
-      licenseNumber: dto.licenseNumber,
-      specialization: dto.specialization,
-      yearsOfExperience: dto.yearsOfExperience ?? null,
-      bio: dto.bio ?? null,
-      hospitalId: dto.hospitalId ?? null,
-      departmentId: dto.departmentId ?? null,
-      isVerified: true,
-    };
-
-    await this.prisma.$transaction([
-      this.prisma.user.update({
-        where: { id: userId },
-        data: { role: Role.DOCTOR },
-      }),
-      this.prisma.doctorProfile.upsert({
-        where: { userId },
-        create: { userId, ...profileData },
-        update: profileData,
-      }),
-    ]);
-
-    const updated = await this.prisma.user.findUniqueOrThrow({
-      where: { id: userId },
-      include: {
-        patientProfile: true,
-        doctorProfile: true,
-        caregiverProfile: true,
-      },
-    });
-    return UserEntity.fromUser(updated);
   }
 }

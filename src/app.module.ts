@@ -15,6 +15,7 @@ import { AuditModule } from './audit/audit.module';
 import { AuthModule } from './auth/auth.module';
 import { ChatModule } from './chat/chat.module';
 import { DevicesModule } from './devices/devices.module';
+import { DoctorsModule } from './doctors/doctors.module';
 import { DocumentsModule } from './documents/documents.module';
 import { HospitalsModule } from './hospitals/hospitals.module';
 import { TelemedicineModule } from './telemedicine/telemedicine.module';
@@ -69,6 +70,7 @@ import { VitalsModule } from './vitals/vitals.module';
     NotificationsModule,
     AuthModule,
     UsersModule,
+    DoctorsModule,
     UploadsModule,
     HospitalsModule,
     AppointmentsModule,
