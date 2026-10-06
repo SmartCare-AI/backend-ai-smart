@@ -17,6 +17,7 @@ import {
 import { randomUUID } from 'crypto';
 import type { AuthenticatedUser } from '../common/decorators/current-user.decorator';
 import { fullName } from '../common/utils/user-name.util';
+import { ConsentService } from '../consent/consent.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import {
@@ -49,6 +50,7 @@ export class TelemedicineService {
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
     private readonly notifications: NotificationsService,
+    private readonly consent: ConsentService,
   ) {
     this.roomBaseUrl = this.config
       .get<string>('TELEMEDICINE_BASE_URL', 'https://call.shifaa.app')
@@ -175,6 +177,16 @@ export class TelemedicineService {
         data: { status: AppointmentStatus.COMPLETED },
       }),
     ]);
+    const appointment = await this.prisma.appointment.findUniqueOrThrow({
+      where: { id: session.appointmentId },
+      select: { patientId: true, doctorId: true },
+    });
+    // A completed consultation extends record access to now + 12 months.
+    await this.consent.grantCare(
+      appointment.patientId,
+      appointment.doctorId,
+      new Date(),
+    );
     return updated;
   }
 

@@ -68,9 +68,12 @@ export class VisitsService {
         'This appointment belongs to another doctor.',
       );
     }
-    if (appointment.status === AppointmentStatus.CANCELLED) {
+    if (
+      appointment.status === AppointmentStatus.CANCELLED ||
+      appointment.status === AppointmentStatus.NO_SHOW
+    ) {
       throw new BadRequestException(
-        'Cannot start a visit from a cancelled appointment.',
+        `Cannot start a visit from a ${appointment.status} appointment.`,
       );
     }
     if (appointment.visit) {
@@ -93,6 +96,12 @@ export class VisitsService {
         data: { status: AppointmentStatus.COMPLETED },
       }),
     ]);
+    // Seeing the patient extends record access to now + 12 months.
+    await this.consent.grantCare(
+      appointment.patientId,
+      appointment.doctorId,
+      new Date(),
+    );
     return visit;
   }
 

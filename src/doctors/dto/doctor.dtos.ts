@@ -134,6 +134,17 @@ export class SearchDoctorsDto extends PaginationDto {
   hospitalId?: number;
 }
 
+export class MyPatientsQueryDto extends PaginationDto {
+  @ApiPropertyOptional({
+    example: 'omar',
+    description: 'Patient name or medical record number.',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  q?: string;
+}
+
 export class AdminListDoctorsDto extends PaginationDto {
   @ApiPropertyOptional({ enum: ProfileStatus })
   @IsOptional()

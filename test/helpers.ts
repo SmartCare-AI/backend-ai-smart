@@ -161,11 +161,36 @@ export async function createAppointment(
   },
 ) {
   const start = new Date(Date.now() + (input.inHours ?? 24) * 3_600_000);
+  const status = input.status ?? AppointmentStatus.PENDING;
+  // Mirror production: a confirmed/completed appointment means the doctor
+  // accepted the patient, which is what creates the care relationship
+  // (12 months after the appointment, like the Phase 3 backfill).
+  if (
+    status === AppointmentStatus.CONFIRMED ||
+    status === AppointmentStatus.COMPLETED
+  ) {
+    const expiresAt = new Date(start.getTime() + 30 * 60_000);
+    expiresAt.setMonth(expiresAt.getMonth() + 12);
+    await prisma.careRelationship.upsert({
+      where: {
+        patientId_doctorId: {
+          patientId: input.patientId,
+          doctorId: input.doctorId,
+        },
+      },
+      create: {
+        patientId: input.patientId,
+        doctorId: input.doctorId,
+        expiresAt,
+      },
+      update: { expiresAt },
+    });
+  }
   return prisma.appointment.create({
     data: {
       patientId: input.patientId,
       doctorId: input.doctorId,
-      status: input.status ?? AppointmentStatus.PENDING,
+      status,
       type: input.type ?? AppointmentType.IN_PERSON,
       date: new Date(
         Date.UTC(

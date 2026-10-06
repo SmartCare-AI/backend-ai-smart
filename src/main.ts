@@ -108,6 +108,10 @@ async function bootstrap() {
     )
     .addTag('Hospitals', 'Hospitals & departments (admin-managed)')
     .addTag(
+      'Care Team',
+      'Doctors with access to my record, revoke, access history',
+    )
+    .addTag(
       'Family Portal',
       'Care circle: invitations, caregiver links, extra consents',
     )

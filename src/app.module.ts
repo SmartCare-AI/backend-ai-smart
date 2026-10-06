@@ -30,6 +30,7 @@ import { EmergencyModule } from './emergency/emergency.module';
 import { FirebaseModule } from './firebase/firebase.module';
 import { MailModule } from './mail/mail.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { PatientsModule } from './patients/patients.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { QueueModule } from './queues/queue.module';
 import { UploadsModule } from './uploads/uploads.module';
@@ -73,6 +74,7 @@ import { VitalsModule } from './vitals/vitals.module';
     UsersModule,
     DoctorsModule,
     CaregiversModule,
+    PatientsModule,
     UploadsModule,
     HospitalsModule,
     AppointmentsModule,

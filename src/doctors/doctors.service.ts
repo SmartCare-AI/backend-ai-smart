@@ -6,7 +6,9 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import {
+  AlertStatus,
   AppointmentStatus,
+  MedicineTrackingStatus,
   NotificationType,
   OnlineVisitStatus,
   Prisma,
@@ -18,9 +20,11 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProfilesService } from '../users/profiles.service';
 import { UsersService } from '../users/users.service';
+import { ConsentService } from '../consent/consent.service';
 import {
   AdminListDoctorsDto,
   BecomeDoctorDto,
+  MyPatientsQueryDto,
   SearchDoctorsDto,
   SetDoctorStatusDto,
   UpdateMyDoctorProfileDto,
@@ -59,6 +63,7 @@ export class DoctorsService {
     private readonly profiles: ProfilesService,
     private readonly users: UsersService,
     private readonly notifications: NotificationsService,
+    private readonly consent: ConsentService,
   ) {}
 
   /** Filter shared by search, public profile and booking. */
@@ -216,6 +221,130 @@ export class DoctorsService {
       }),
     ]);
     return this.users.getProfile(userId);
+  }
+
+  /**
+   * The doctor's patient list: everyone with an active care relationship,
+   * with the numbers a dashboard needs (last visit, open alerts, 30-day
+   * medication adherence, next appointment).
+   */
+  async myPatients(userId: number, query: MyPatientsQueryDto) {
+    const doctor = await this.profiles.getDoctorByUserId(userId);
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 20;
+    const q = query.q?.trim();
+    const where: Prisma.CareRelationshipWhereInput = {
+      doctorId: doctor.id,
+      ...this.consent.activeRelationshipWhere(),
+      ...(q && {
+        patient: {
+          OR: [
+            { firstName: { contains: q, mode: 'insensitive' } },
+            { lastName: { contains: q, mode: 'insensitive' } },
+            { medicalRecordNo: { contains: q, mode: 'insensitive' } },
+          ],
+        },
+      }),
+    };
+    const [relationships, total] = await this.prisma.$transaction([
+      this.prisma.careRelationship.findMany({
+        where,
+        include: {
+          patient: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              medicalRecordNo: true,
+              dateOfBirth: true,
+              gender: true,
+              bloodType: true,
+              user: { select: { id: true, avatarUrl: true } },
+              _count: {
+                select: {
+                  alerts: {
+                    where: {
+                      status: {
+                        in: [AlertStatus.NEW, AlertStatus.ACKNOWLEDGED],
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        orderBy: { updatedAt: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      this.prisma.careRelationship.count({ where }),
+    ]);
+
+    const patientIds = relationships.map((r) => r.patientId);
+    const since = new Date(Date.now() - 30 * 86_400_000);
+    const [doses, visits, upcoming] = await Promise.all([
+      this.prisma.medicineTracking.groupBy({
+        by: ['patientId', 'status'],
+        where: {
+          patientId: { in: patientIds },
+          scheduledTime: { gte: since, lte: new Date() },
+          status: {
+            in: [MedicineTrackingStatus.TAKEN, MedicineTrackingStatus.MISSED],
+          },
+        },
+        _count: { _all: true },
+      }),
+      this.prisma.visit.findMany({
+        where: {
+          appointment: { doctorId: doctor.id, patientId: { in: patientIds } },
+        },
+        orderBy: { date: 'desc' },
+        select: { date: true, appointment: { select: { patientId: true } } },
+      }),
+      this.prisma.appointment.findMany({
+        where: {
+          doctorId: doctor.id,
+          patientId: { in: patientIds },
+          status: {
+            in: [AppointmentStatus.PENDING, AppointmentStatus.CONFIRMED],
+          },
+          startTime: { gt: new Date() },
+        },
+        orderBy: { startTime: 'asc' },
+        select: { id: true, patientId: true, startTime: true, status: true },
+      }),
+    ]);
+
+    const adherence = (patientId: number): number | null => {
+      const count = (status: MedicineTrackingStatus) =>
+        doses.find((d) => d.patientId === patientId && d.status === status)
+          ?._count._all ?? 0;
+      const taken = count(MedicineTrackingStatus.TAKEN);
+      const settled = taken + count(MedicineTrackingStatus.MISSED);
+      return settled === 0 ? null : Math.round((taken / settled) * 100) / 100;
+    };
+
+    return {
+      items: relationships.map((r) => {
+        const { user, _count, ...patient } = r.patient;
+        return {
+          relationshipId: r.id,
+          accessExpiresAt: r.expiresAt,
+          patient: { ...patient, userId: user.id, avatarUrl: user.avatarUrl },
+          openAlerts: _count.alerts,
+          adherenceScore30d: adherence(r.patientId),
+          lastVisitAt:
+            visits.find((v) => v.appointment.patientId === r.patientId)?.date ??
+            null,
+          nextAppointment:
+            upcoming.find((a) => a.patientId === r.patientId) ?? null,
+        };
+      }),
+      total,
+      page,
+      limit,
+    };
   }
 
   // -------------------------------------------------------------------------

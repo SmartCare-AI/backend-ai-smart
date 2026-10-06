@@ -436,6 +436,18 @@ enum ConsentType {
   FULL_ACCESS
 }
 
+/// MVP Phase 3: why a doctor may read a patient's record. GP2 adds
+/// REFERRAL and BREAK_GLASS origins.
+enum CareRelationshipOrigin {
+  APPOINTMENT
+}
+
+enum CareRelationshipStatus {
+  ACTIVE
+  EXPIRED
+  REVOKED
+}
+
 /// Lifecycle of a patient's invitation to join their care circle.
 enum InvitationStatus {
   PENDING
@@ -567,6 +579,7 @@ model PatientProfile {
   documents         MedicalDocument[]
   consents          Consent[]
   caregiverInvites  CaregiverInvitation[]
+  careRelationships CareRelationship[]
 
   @@index([status])
   @@map("patient_profiles")
@@ -593,10 +606,11 @@ model DoctorProfile {
   department   Department? @relation(fields: [departmentId], references: [id])
   isVerified   Boolean     @default(false)
 
-  appointments   Appointment[]
-  medicalTests   MedicalTest[]
-  medicalImages  MedicalImage[]
-  treatmentPlans TreatmentPlan[]
+  appointments      Appointment[]
+  medicalTests      MedicalTest[]
+  medicalImages     MedicalImage[]
+  treatmentPlans    TreatmentPlan[]
+  careRelationships CareRelationship[]
 
   @@index([hospitalId, isVerified])
   @@map("doctor_profiles")
@@ -668,6 +682,29 @@ model CaregiverInvitation {
   @@index([email, status])
   @@index([patientId, status])
   @@map("caregiver_invitations")
+}
+
+/// The doctor ↔ patient treating relationship (MVP Phase 3). THE source of
+/// truth for doctor access to a record, the care circle and the doctor's
+/// patient list. Created when the doctor confirms an appointment, extended by
+/// each visit (+12 months), visible to the patient and revocable by them.
+/// An ACTIVE row past `expiresAt` counts as expired.
+model CareRelationship {
+  id        Int                    @id @default(autoincrement())
+  patientId Int
+  patient   PatientProfile         @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  doctorId  Int
+  doctor    DoctorProfile          @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  origin    CareRelationshipOrigin @default(APPOINTMENT)
+  status    CareRelationshipStatus @default(ACTIVE)
+  startsAt  DateTime               @default(now())
+  expiresAt DateTime
+  revokedAt DateTime?
+  updatedAt DateTime               @updatedAt
+
+  @@unique([patientId, doctorId])
+  @@index([doctorId, status])
+  @@map("care_relationships")
 }
 
 /// ERD #30 Consent — explicit, auditable data-sharing permission (SEC-003).

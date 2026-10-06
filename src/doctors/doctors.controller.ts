@@ -24,6 +24,7 @@ import { DoctorsService } from './doctors.service';
 import {
   AdminListDoctorsDto,
   BecomeDoctorDto,
+  MyPatientsQueryDto,
   SearchDoctorsDto,
   SetDoctorStatusDto,
   UpdateMyDoctorProfileDto,
@@ -84,6 +85,20 @@ export class DoctorsController {
     @Body() dto: UpdateMyDoctorProfileDto,
   ) {
     return this.doctors.updateMine(user.id, dto);
+  }
+
+  @Get('me/patients')
+  @Roles(Role.DOCTOR)
+  @ApiOperation({
+    summary: 'My patients (doctor)',
+    description:
+      'Patients with an active care relationship (confirmed appointment or visit in the last 12 months, not revoked by the patient). Includes open alerts, 30-day adherence (0–1, null when no doses settled), last visit and next appointment.',
+  })
+  myPatients(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query() query: MyPatientsQueryDto,
+  ) {
+    return this.doctors.myPatients(user.id, query);
   }
 
   @Post('me/profile')

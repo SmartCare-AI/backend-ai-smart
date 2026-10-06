@@ -197,6 +197,12 @@ export class AppointmentsService {
       where: { id },
       data: { status: AppointmentStatus.CONFIRMED },
     });
+    // Accepting the patient starts (or extends) record access.
+    await this.consent.grantCare(
+      updated.patientId,
+      updated.doctorId,
+      updated.endTime,
+    );
     if (REMOTE_TYPES.includes(updated.type)) {
       await this.telemedicine.ensureForAppointment(updated.id);
     }
@@ -250,6 +256,8 @@ export class AppointmentsService {
       where: { appointmentId: id, status: { not: 'COMPLETED' } },
       data: { status: 'CANCELLED' },
     });
+    // Access only lasts as long as the remaining appointments justify.
+    await this.consent.recomputeCare(updated.patientId, updated.doctorId);
 
     // Tell the other side.
     if (requester.role === Role.DOCTOR) {
@@ -284,6 +292,7 @@ export class AppointmentsService {
         patient: {
           select: {
             id: true,
+            userId: true,
             firstName: true,
             lastName: true,
             medicalRecordNo: true,
@@ -292,6 +301,7 @@ export class AppointmentsService {
         doctor: {
           select: {
             id: true,
+            userId: true,
             firstName: true,
             lastName: true,
             specialization: true,
@@ -302,12 +312,23 @@ export class AppointmentsService {
       },
     });
     if (!appointment) throw new NotFoundException('Appointment not found.');
-    await this.consent.assertCanAccessPatient(
-      requester,
-      appointment.patientId,
-      ConsentType.VIEW_RECORDS,
-    );
-    return appointment;
+    // The two participants always see their own booking (a doctor must be
+    // able to read a PENDING request before accepting it); anyone else
+    // needs record access to the patient.
+    const isParticipant =
+      appointment.doctor.userId === requester.id ||
+      appointment.patient.userId === requester.id;
+    if (!isParticipant) {
+      await this.consent.assertCanAccessPatient(
+        requester,
+        appointment.patientId,
+        ConsentType.VIEW_RECORDS,
+      );
+    }
+    const { patient, doctor, ...rest } = appointment;
+    const { userId: _patientUserId, ...patientOut } = patient;
+    const { userId: _doctorUserId, ...doctorOut } = doctor;
+    return { ...rest, patient: patientOut, doctor: doctorOut };
   }
 
   // -------------------------------------------------------------------------
