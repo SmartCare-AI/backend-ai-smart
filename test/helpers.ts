@@ -94,11 +94,11 @@ const nextEmail = (prefix: string) =>
 
 export async function createPatient(
   prisma: PrismaService,
-  opts: { timezone?: string; firstName?: string } = {},
+  opts: { timezone?: string; firstName?: string; email?: string } = {},
 ) {
   const user = await prisma.user.create({
     data: {
-      email: nextEmail('patient'),
+      email: opts.email ?? nextEmail('patient'),
       role: Role.PATIENT,
       isEmailVerified: true,
       patientProfile: {

@@ -107,6 +107,10 @@ async function bootstrap() {
       'Doctor directory (public search), self-service doctor profile, admin suspension',
     )
     .addTag('Hospitals', 'Hospitals & departments (admin-managed)')
+    .addTag(
+      'Family Portal',
+      'Care circle: invitations, caregiver links, extra consents',
+    )
     .addTag('Appointments', 'Booking, confirmation, doctor schedules')
     .addTag('Visits', 'Encounters: diagnoses, tests, results, radiology')
     .addTag('Assessments', 'Symptom self-reports & doctor evaluations')

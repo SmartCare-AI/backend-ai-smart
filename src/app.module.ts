@@ -13,6 +13,7 @@ import { AppointmentsModule } from './appointments/appointments.module';
 import { AuditInterceptor } from './audit/audit.interceptor';
 import { AuditModule } from './audit/audit.module';
 import { AuthModule } from './auth/auth.module';
+import { CaregiversModule } from './caregivers/caregivers.module';
 import { ChatModule } from './chat/chat.module';
 import { DevicesModule } from './devices/devices.module';
 import { DoctorsModule } from './doctors/doctors.module';
@@ -71,6 +72,7 @@ import { VitalsModule } from './vitals/vitals.module';
     AuthModule,
     UsersModule,
     DoctorsModule,
+    CaregiversModule,
     UploadsModule,
     HospitalsModule,
     AppointmentsModule,

@@ -56,6 +56,27 @@ export class MailService {
     );
   }
 
+  /**
+   * Tells someone a patient invited them to their care circle. The invitee
+   * accepts in the app after signing in with THIS email address — the email
+   * itself carries no secret.
+   */
+  async sendCaregiverInvitation(
+    to: string,
+    patientName: string,
+    relationship: string,
+    expiresAt: Date,
+  ) {
+    await this.send(
+      to,
+      `${patientName} invited you to their SmartCare AI care circle`,
+      this.template(
+        `${patientName} invited you as their ${relationship}`,
+        `Sign in to the SmartCare AI app with this email address (or create an account with it), open "Invitations" and accept to follow ${patientName}'s health alerts. The invitation expires on ${expiresAt.toUTCString()}.`,
+      ),
+    );
+  }
+
   private async send(to: string, subject: string, html: string) {
     // Dev fallback: no SMTP credentials configured yet.
     if (!this.transporter) {
@@ -73,16 +94,29 @@ export class MailService {
     }
   }
 
-  private template(title: string, message: string, code: string): string {
+  /** Title and message are escaped: they can contain user-supplied names. */
+  private template(title: string, message: string, code?: string): string {
+    const codeBlock = code
+      ? `
+  <div style="background: #f0fdfa; border: 1px dashed #0f766e; border-radius: 8px; text-align: center; padding: 16px; margin: 16px 0;">
+    <span style="font-size: 32px; letter-spacing: 8px; font-weight: bold; color: #0f766e;">${escapeHtml(code)}</span>
+  </div>`
+      : '';
     return `
 <div style="font-family: Arial, Helvetica, sans-serif; max-width: 480px; margin: 0 auto; padding: 24px; border: 1px solid #e5e7eb; border-radius: 12px;">
   <h2 style="color: #0f766e; margin-top: 0;">SmartCare AI</h2>
-  <h3 style="margin-bottom: 8px;">${title}</h3>
-  <p style="color: #374151; line-height: 1.6;">${message}</p>
-  <div style="background: #f0fdfa; border: 1px dashed #0f766e; border-radius: 8px; text-align: center; padding: 16px; margin: 16px 0;">
-    <span style="font-size: 32px; letter-spacing: 8px; font-weight: bold; color: #0f766e;">${code}</span>
-  </div>
+  <h3 style="margin-bottom: 8px;">${escapeHtml(title)}</h3>
+  <p style="color: #374151; line-height: 1.6;">${escapeHtml(message)}</p>${codeBlock}
   <p style="color: #9ca3af; font-size: 12px;">This is an automated message from the SmartCare AI platform — please do not reply.</p>
 </div>`;
   }
+}
+
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }

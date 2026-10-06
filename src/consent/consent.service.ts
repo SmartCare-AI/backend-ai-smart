@@ -29,9 +29,10 @@ import { PrismaService } from '../prisma/prisma.service';
  *                            care window (12 months). Cancelled or pending
  *                            bookings and long-past care grant nothing, and a
  *                            suspended doctor loses access.
- *  - CAREGIVER            → only with an active PatientCaregiver link
- *                            (BR-003) or an explicit Consent row covering the
- *                            needed type
+ *  - CAREGIVER            → only with an active, unexpired PatientCaregiver
+ *                            link (BR-003) whose permission level — or an
+ *                            extra Consent the patient granted on top of it —
+ *                            covers the needed type
  */
 /** How long a confirmed/completed appointment keeps a doctor "treating". */
 export const CARE_WINDOW_MONTHS = 12;
@@ -78,6 +79,30 @@ export class ConsentService {
       select: { id: true },
     });
     return !!treating;
+  }
+
+  /** An ACTIVE caregiver link whose end date (if any) is still ahead. */
+  activeCaregiverLinkWhere(): Prisma.PatientCaregiverWhereInput {
+    return {
+      status: CareLinkStatus.ACTIVE,
+      OR: [{ endDate: null }, { endDate: { gt: new Date() } }],
+    };
+  }
+
+  /** Does this caregiver (by user id) currently follow this patient? */
+  async hasActiveCaregiverLink(
+    caregiverUserId: number,
+    patientProfileId: number,
+  ): Promise<boolean> {
+    const link = await this.prisma.patientCaregiver.findFirst({
+      where: {
+        patientId: patientProfileId,
+        caregiver: { userId: caregiverUserId },
+        ...this.activeCaregiverLinkWhere(),
+      },
+      select: { id: true },
+    });
+    return !!link;
   }
 
   /** Patient profile ids this doctor (by profile id) currently treats. */
@@ -148,11 +173,41 @@ export class ConsentService {
       this.prisma.patientCaregiver.findMany({
         where: {
           patientId,
-          status: CareLinkStatus.ACTIVE,
-          permissionLevel: {
-            in: [ConsentType.RECEIVE_ALERTS, ConsentType.FULL_ACCESS],
-          },
-          OR: [{ endDate: null }, { endDate: { gt: new Date() } }],
+          ...this.activeCaregiverLinkWhere(),
+          // Alerts reach caregivers whose link OR an extra consent covers it.
+          AND: [
+            {
+              OR: [
+                {
+                  permissionLevel: {
+                    in: [ConsentType.RECEIVE_ALERTS, ConsentType.FULL_ACCESS],
+                  },
+                },
+                {
+                  caregiver: {
+                    user: {
+                      consentsReceived: {
+                        some: {
+                          patientId,
+                          status: ConsentStatus.ACTIVE,
+                          type: {
+                            in: [
+                              ConsentType.RECEIVE_ALERTS,
+                              ConsentType.FULL_ACCESS,
+                            ],
+                          },
+                          OR: [
+                            { expiresAt: null },
+                            { expiresAt: { gt: new Date() } },
+                          ],
+                        },
+                      },
+                    },
+                  },
+                },
+              ],
+            },
+          ],
         },
         select: { caregiver: { select: { userId: true } } },
       }),
@@ -175,15 +230,16 @@ export class ConsentService {
     const link = await this.prisma.patientCaregiver.findFirst({
       where: {
         patientId: patientProfileId,
-        status: CareLinkStatus.ACTIVE,
-        permissionLevel: { in: acceptable },
         caregiver: { userId: requesterUserId },
-        OR: [{ endDate: null }, { endDate: { gt: new Date() } }],
+        ...this.activeCaregiverLinkWhere(),
       },
-      select: { id: true },
+      select: { permissionLevel: true },
     });
-    if (link) return true;
+    // No active link = no access at all, whatever consents remain.
+    if (!link) return false;
+    if (acceptable.includes(link.permissionLevel)) return true;
 
+    // Extra permissions the patient granted on top of the link level.
     const consent = await this.prisma.consent.findFirst({
       where: {
         patientId: patientProfileId,

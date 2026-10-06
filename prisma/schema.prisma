@@ -436,6 +436,14 @@ enum ConsentType {
   FULL_ACCESS
 }
 
+/// Lifecycle of a patient's invitation to join their care circle.
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  CANCELLED
+}
+
 /// ERD Consent.Status — "Active, Expired, Revoked".
 enum ConsentStatus {
   ACTIVE
@@ -558,6 +566,7 @@ model PatientProfile {
   emergencyContacts EmergencyContact[]
   documents         MedicalDocument[]
   consents          Consent[]
+  caregiverInvites  CaregiverInvitation[]
 
   @@index([status])
   @@map("patient_profiles")
@@ -633,6 +642,32 @@ model PatientCaregiver {
   @@unique([patientId, caregiverId])
   @@index([patientId, status])
   @@map("patient_caregivers")
+}
+
+/// A patient invites a family member by email (Family Portal, MVP Phase 2).
+/// The invitee accepts after signing in with that email, which creates their
+/// CaregiverProfile (if needed) and the ACTIVE PatientCaregiver link. A
+/// PENDING invitation past `expiresAt` counts as expired.
+model CaregiverInvitation {
+  id               Int              @id @default(autoincrement())
+  patientId        Int
+  patient          PatientProfile   @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  /// Lowercased invitee email; only the account with this email can accept.
+  email            String
+  /// e.g. "son", "spouse", "professional nurse" → CaregiverProfile.relationship
+  relationship     String
+  permissionLevel  ConsentType      @default(RECEIVE_ALERTS)
+  /// Optional end of the resulting access (PatientCaregiver.endDate)
+  accessEndDate    DateTime?
+  status           InvitationStatus @default(PENDING)
+  expiresAt        DateTime
+  createdAt        DateTime         @default(now())
+  respondedAt      DateTime?
+  acceptedByUserId Int?
+
+  @@index([email, status])
+  @@index([patientId, status])
+  @@map("caregiver_invitations")
 }
 
 /// ERD #30 Consent — explicit, auditable data-sharing permission (SEC-003).

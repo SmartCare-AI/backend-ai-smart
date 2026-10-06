@@ -5,7 +5,6 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import {
-  CareLinkStatus,
   ChatStatus,
   ChatType,
   MessageStatus,
@@ -334,15 +333,16 @@ export class ChatService {
         requester.role === Role.CAREGIVER ? requester.id : other.id;
       const patientUserId =
         requester.role === Role.PATIENT ? requester.id : other.id;
-      const link = await this.prisma.patientCaregiver.findFirst({
-        where: {
-          status: CareLinkStatus.ACTIVE,
-          caregiver: { userId: caregiverUserId },
-          patient: { userId: patientUserId },
-        },
+      const patient = await this.prisma.patientProfile.findUnique({
+        where: { userId: patientUserId },
         select: { id: true },
       });
-      if (link) return;
+      if (
+        patient &&
+        (await this.consent.hasActiveCaregiverLink(caregiverUserId, patient.id))
+      ) {
+        return;
+      }
       throw new ForbiddenException(
         'No active caregiver link with this patient.',
       );
