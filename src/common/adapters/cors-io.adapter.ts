@@ -20,6 +20,6 @@ export class CorsIoAdapter extends IoAdapter {
     return super.createIOServer(port, {
       ...options,
       cors: { origin: this.origin, credentials: true },
-    } as ServerOptions);
+    });
   }
 }

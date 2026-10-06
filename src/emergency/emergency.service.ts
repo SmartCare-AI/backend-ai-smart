@@ -278,11 +278,13 @@ export class EmergencyService implements OnModuleInit {
     );
     if (!queued) {
       // Dev fallback without Redis: in-process timer.
+      // unref(): the timer must never keep the process alive on shutdown —
+      // the sweeper picks the event up after a restart anyway.
       setTimeout(() => {
         void this.escalate(emergencyEventId).catch((err: Error) =>
           this.logger.error(`Escalation failed: ${err.message}`),
         );
-      }, this.escalationDelayMs);
+      }, this.escalationDelayMs).unref();
     }
   }
 

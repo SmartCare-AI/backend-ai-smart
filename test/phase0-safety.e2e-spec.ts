@@ -34,27 +34,55 @@ describe('Phase 0 — safety and correctness fixes', () => {
       inHours: number;
       expected: number;
     }[] = [
-      { name: 'pending booking', status: 'PENDING', inHours: 24, expected: 403 },
-      { name: 'cancelled booking', status: 'CANCELLED', inHours: -24, expected: 403 },
-      { name: 'confirmed booking', status: 'CONFIRMED', inHours: 24, expected: 200 },
-      { name: 'completed recently', status: 'COMPLETED', inHours: -24 * 30, expected: 200 },
-      { name: 'completed 13 months ago', status: 'COMPLETED', inHours: -24 * 400, expected: 403 },
+      {
+        name: 'pending booking',
+        status: 'PENDING',
+        inHours: 24,
+        expected: 403,
+      },
+      {
+        name: 'cancelled booking',
+        status: 'CANCELLED',
+        inHours: -24,
+        expected: 403,
+      },
+      {
+        name: 'confirmed booking',
+        status: 'CONFIRMED',
+        inHours: 24,
+        expected: 200,
+      },
+      {
+        name: 'completed recently',
+        status: 'COMPLETED',
+        inHours: -24 * 30,
+        expected: 200,
+      },
+      {
+        name: 'completed 13 months ago',
+        status: 'COMPLETED',
+        inHours: -24 * 400,
+        expected: 403,
+      },
     ];
 
-    it.each(cases)('$name → $expected', async ({ status, inHours, expected }) => {
-      const patient = await createPatient(ctx.prisma);
-      const doctor = await createDoctor(ctx.prisma);
-      await createAppointment(ctx.prisma, {
-        patientId: patient.profile.id,
-        doctorId: doctor.profile.id,
-        status,
-        inHours,
-      });
-      await ctx
-        .api(doctor.user)
-        .get(`/vitals/patients/${patient.profile.id}`)
-        .expect(expected);
-    });
+    it.each(cases)(
+      '$name → $expected',
+      async ({ status, inHours, expected }) => {
+        const patient = await createPatient(ctx.prisma);
+        const doctor = await createDoctor(ctx.prisma);
+        await createAppointment(ctx.prisma, {
+          patientId: patient.profile.id,
+          doctorId: doctor.profile.id,
+          status,
+          inHours,
+        });
+        await ctx
+          .api(doctor.user)
+          .get(`/vitals/patients/${patient.profile.id}`)
+          .expect(expected);
+      },
+    );
 
     it('a suspended doctor loses access', async () => {
       const patient = await createPatient(ctx.prisma);
@@ -165,8 +193,18 @@ describe('Phase 0 — safety and correctness fixes', () => {
       const patient = await createPatient(ctx.prisma);
       await ctx.prisma.emergencyContact.createMany({
         data: [
-          { patientId: patient.profile.id, name: 'Mona', phone: '+201000000001', priority: 1 },
-          { patientId: patient.profile.id, name: 'Ali', phone: '+201000000002', priority: 2 },
+          {
+            patientId: patient.profile.id,
+            name: 'Mona',
+            phone: '+201000000001',
+            priority: 1,
+          },
+          {
+            patientId: patient.profile.id,
+            name: 'Ali',
+            phone: '+201000000002',
+            priority: 2,
+          },
         ],
       });
       // As if the server restarted after opening the event: no timer exists.

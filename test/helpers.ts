@@ -89,7 +89,8 @@ export async function resetDatabase(prisma: PrismaService): Promise<void> {
 // ---------------------------------------------------------------------------
 
 let seq = 0;
-const nextEmail = (prefix: string) => `${prefix}${++seq}-${Date.now()}@test.dev`;
+const nextEmail = (prefix: string) =>
+  `${prefix}${++seq}-${Date.now()}@test.dev`;
 
 export async function createPatient(
   prisma: PrismaService,
