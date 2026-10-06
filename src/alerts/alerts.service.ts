@@ -166,7 +166,7 @@ export class AlertsService {
     const doctor = await this.profiles.getDoctorByUserId(requester.id);
     const where: Prisma.AlertWhereInput = {
       status: { in: OPEN_STATUSES },
-      patient: { appointments: { some: { doctorId: doctor.id } } },
+      patient: this.consent.treatedPatientsWhere(doctor.id),
     };
     const [items, total] = await this.prisma.$transaction([
       this.prisma.alert.findMany({
@@ -200,15 +200,8 @@ export class AlertsService {
 
     // Only a treating doctor (or admin) manages alert lifecycle.
     if (requester.role !== Role.ADMIN) {
-      const doctor = await this.profiles.getDoctorByUserId(requester.id);
-      const treating = await this.prisma.patientProfile.findFirst({
-        where: {
-          id: alert.patientId,
-          appointments: { some: { doctorId: doctor.id } },
-        },
-        select: { id: true },
-      });
-      if (!treating) {
+      await this.profiles.getDoctorByUserId(requester.id);
+      if (!(await this.consent.isTreatingDoctor(requester.id, alert.patientId))) {
         throw new ForbiddenException('You are not treating this patient.');
       }
     }

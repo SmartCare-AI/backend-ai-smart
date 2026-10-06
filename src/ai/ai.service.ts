@@ -1,11 +1,14 @@
 import { Inject, Injectable } from '@nestjs/common';
 import {
   AlertStatus,
+  AlertType,
   AssessmentType,
   ConsentType,
   EmergencyStatus,
+  EmergencyType,
   RiskLevel,
 } from '@prisma/client';
+import { AlertsService } from '../alerts/alerts.service';
 import type { AuthenticatedUser } from '../common/decorators/current-user.decorator';
 import { ConsentService } from '../consent/consent.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -24,6 +27,7 @@ export class AiService {
     private readonly profiles: ProfilesService,
     private readonly consent: ConsentService,
     private readonly treatment: TreatmentService,
+    private readonly alerts: AlertsService,
     @Inject(AI_PROVIDER) private readonly ai: AiProvider,
   ) {}
 
@@ -31,6 +35,10 @@ export class AiService {
    * Patient symptom triage: assistive risk assessment + specialty
    * suggestion — never a diagnosis. The result is persisted as an
    * AI_INITIAL Assessment so the doctor sees it at the next visit.
+   *
+   * A CRITICAL result also raises a CRITICAL alert, which opens an emergency:
+   * the care circle is notified and SMS escalation is armed, exactly like a
+   * critical vital sign.
    */
   async triage(requester: AuthenticatedUser, dto: TriageRequestDto) {
     const patient = await this.profiles.getPatientByUserId(requester.id);
@@ -62,13 +70,39 @@ export class AiService {
         suggestedSpecialty: result.suggestedSpecialty,
         notes: dto.notes ?? null,
         observations: result.reasons.join(' '),
+        aiEngine: result.engine,
       },
       select: { id: true, date: true },
     });
 
+    let emergencyAlertId: number | null = null;
+    if (result.riskLevel === RiskLevel.CRITICAL) {
+      const alert = await this.alerts.raise({
+        patientId: patient.id,
+        type: AlertType.AI_RISK,
+        severity: RiskLevel.CRITICAL,
+        title: 'AI triage: critical symptoms reported',
+        description: [
+          `Symptoms: ${dto.symptoms.map((s) => s.name).join(', ')}.`,
+          result.redFlags.length
+            ? `Red flags: ${result.redFlags.join(', ')}.`
+            : '',
+        ]
+          .join(' ')
+          .trim(),
+        source: 'ai_triage',
+        emergencyType: EmergencyType.OTHER,
+      });
+      emergencyAlertId = alert?.id ?? null;
+    }
+
     return {
       assessmentId: assessment.id,
       ...result,
+      /** Set when a CRITICAL result alerted the care circle. */
+      emergencyAlertId,
+      /** Doctor search filter for the suggested specialty (see GET /doctors). */
+      doctorSearch: { specialization: result.suggestedSpecialty },
       disclaimer:
         'Assistive assessment only — not a medical diagnosis. Always consult a doctor.',
     };

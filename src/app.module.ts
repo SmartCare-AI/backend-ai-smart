@@ -49,6 +49,8 @@ import { VitalsModule } from './vitals/vitals.module';
         const redisUrl = config.get<string>('REDIS_URL');
         return {
           throttlers: [{ name: 'default', ttl: 60_000, limit: 100 }],
+          // Automated test runs only (test/setup-env.ts). Never set in prod.
+          skipIf: () => config.get<string>('THROTTLE_DISABLED') === 'true',
           storage: redisUrl
             ? new ThrottlerStorageRedisService(
                 new Redis(redisUrl, { maxRetriesPerRequest: 2 }),

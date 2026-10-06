@@ -54,6 +54,12 @@ export class PatientProfileEntity {
 
   @ApiPropertyOptional({ nullable: true })
   insuranceNumber!: string | null;
+
+  @ApiProperty({
+    example: 'Africa/Cairo',
+    description: 'IANA time zone used to schedule medication doses.',
+  })
+  timezone!: string;
 }
 
 /** ERD #3 Doctor. */

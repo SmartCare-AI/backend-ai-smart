@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { AlertsModule } from '../alerts/alerts.module';
 import { ConfigService } from '@nestjs/config';
 import { TreatmentModule } from '../treatment/treatment.module';
 import { UsersModule } from '../users/users.module';
@@ -9,7 +10,7 @@ import { MlHttpAiProvider } from './providers/ml-http.provider';
 import { RulesAiProvider } from './providers/rules.provider';
 
 @Module({
-  imports: [UsersModule, TreatmentModule],
+  imports: [UsersModule, TreatmentModule, AlertsModule],
   controllers: [AiController],
   providers: [
     AiService,

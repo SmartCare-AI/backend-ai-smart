@@ -542,6 +542,10 @@ model PatientProfile {
   insuranceProvider String?
   insuranceNumber   String?
 
+  /// IANA time zone (e.g. "Africa/Cairo"). Dose times are generated in the
+  /// patient's local time, so a "9:00" dose fires at 9:00 where they live.
+  timezone String @default("Africa/Cairo")
+
   caregivers        PatientCaregiver[]
   appointments      Appointment[]
   assessments       Assessment[]
@@ -767,6 +771,9 @@ model Assessment {
   /// AI output: suggested specialty referral, e.g. "cardiology"
   suggestedSpecialty String?
   notes              String?
+  /// Which engine produced an AI_INITIAL assessment: "rules" | "ml-service" |
+  /// "rules-fallback". Kept for clinical traceability.
+  aiEngine           String?
 
   @@index([patientId, date])
   @@index([visitId])
@@ -1074,6 +1081,9 @@ model EmergencyEvent {
   acknowledgedById Int?
   acknowledgedBy   User?           @relation("EmergencyAcknowledgedBy", fields: [acknowledgedById], references: [id])
   acknowledgedAt   DateTime?
+  /// Set once the SMS escalation ran. Makes escalation idempotent across the
+  /// queue job, the in-process timer and the sweeper.
+  escalatedAt      DateTime?
   resolvedAt       DateTime?
   createdAt        DateTime        @default(now())
 
@@ -1342,3 +1352,14 @@ model RefreshToken {
   @@index([userId])
   @@map("refresh_tokens")
 }
+
+/// Lease-based lock so periodic jobs (medication reminders, appointment
+/// housekeeping, emergency sweeper) run on exactly one API instance at a time.
+model SchedulerLock {
+  name        String   @id
+  lockedUntil DateTime
+  owner       String
+
+  @@map("scheduler_locks")
+}
+

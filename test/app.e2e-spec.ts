@@ -1,27 +1,16 @@
-import { Test, TestingModule } from '@nestjs/testing';
-import { INestApplication } from '@nestjs/common';
-import * as request from 'supertest';
-import { App } from 'supertest/types';
-import { AppModule } from './../src/app.module';
+import { createTestApp, TestContext } from './helpers';
 
 describe('AppController (e2e)', () => {
-  let app: INestApplication<App>;
+  let ctx: TestContext;
 
-  beforeEach(async () => {
-    const moduleFixture: TestingModule = await Test.createTestingModule({
-      imports: [AppModule],
-    }).compile();
-
-    app = moduleFixture.createNestApplication();
-    await app.init();
+  beforeAll(async () => {
+    ctx = await createTestApp();
   });
-
-  afterEach(async () => {
-    await app.close();
-  });
+  afterAll(() => ctx.close());
 
   it('/health (GET)', () => {
-    return request(app.getHttpServer())
+    return ctx
+      .api()
       .get('/health')
       .expect(200)
       .expect({ status: 'ok', service: 'smartcare-api' });

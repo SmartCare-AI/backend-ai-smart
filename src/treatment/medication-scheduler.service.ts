@@ -9,6 +9,7 @@ import {
 import { AlertsService } from '../alerts/alerts.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { SchedulerLockService } from '../prisma/scheduler-lock.service';
 
 const REMINDER_WINDOW_MIN = 15; // remind up to 15 min before the dose
 const MISSED_AFTER_MIN = 60; // dose counts as missed 60 min past schedule
@@ -22,32 +23,31 @@ const CONSECUTIVE_MISSED_FOR_ALERT = 3;
  *                  missed doses raise a HIGH alert to doctor + caregivers
  *                  (the Family Portal promise).
  *
- * Runs in-process via @nestjs/schedule — no external infra needed; the
- * single-instance PM2 deployment makes this safe. (Multi-instance would
- * move this onto the BullMQ 'reminders' queue.)
+ * Runs in-process via @nestjs/schedule. A Postgres lease
+ * (SchedulerLockService) makes sure only one API instance runs each tick,
+ * so scaling out never sends a reminder twice.
  */
 @Injectable()
 export class MedicationSchedulerService {
   private readonly logger = new Logger(MedicationSchedulerService.name);
-  private running = false;
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly notifications: NotificationsService,
     private readonly alerts: AlertsService,
+    private readonly locks: SchedulerLockService,
   ) {}
 
   @Cron(CronExpression.EVERY_MINUTE)
   async tick() {
-    if (this.running) return; // never overlap slow ticks
-    this.running = true;
     try {
-      await this.sendReminders();
-      await this.detectMissed();
+      // The lease also stops slow ticks on the same instance from overlapping.
+      await this.locks.runExclusive('medication-scheduler', 5 * 60_000, async () => {
+        await this.sendReminders();
+        await this.detectMissed();
+      });
     } catch (err) {
       this.logger.error(`Scheduler tick failed: ${(err as Error).message}`);
-    } finally {
-      this.running = false;
     }
   }
 

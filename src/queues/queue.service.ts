@@ -35,8 +35,14 @@ export class QueueService implements OnModuleDestroy {
     this.redisUrl = config.get<string>('REDIS_URL');
     this.enabled = !!this.redisUrl;
     if (!this.enabled) {
+      const production = config.get<string>('NODE_ENV') === 'production';
+      // Not fatal: emergency escalation has a database sweeper, so no SMS is
+      // lost without Redis. Pushes are sent inline and rate limiting falls
+      // back to memory, both fine for a single instance.
       this.logger.warn(
-        'REDIS_URL not set — queues disabled; jobs run inline (dev mode). Set REDIS_URL in production.',
+        production
+          ? 'REDIS_URL not set in PRODUCTION — queues disabled, jobs run inline. Emergencies are still escalated by the database sweeper, but set REDIS_URL before running more than one instance.'
+          : 'REDIS_URL not set — queues disabled; jobs run inline (dev mode).',
       );
     }
   }

@@ -16,6 +16,7 @@ import {
 } from '@prisma/client';
 import type { AuthenticatedUser } from '../common/decorators/current-user.decorator';
 import { USER_NAME_INCLUDE, displayName } from '../common/utils/user-name.util';
+import { ConsentService } from '../consent/consent.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateChatDto, SendMessageDto } from './dto/chat.dtos';
 
@@ -31,7 +32,10 @@ import { CreateChatDto, SendMessageDto } from './dto/chat.dtos';
  */
 @Injectable()
 export class ChatService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly consent: ConsentService,
+  ) {}
 
   // -------------------------------------------------------------------------
   // Chats
@@ -309,16 +313,17 @@ export class ChatService {
         requester.role === Role.DOCTOR ? requester.id : other.id;
       const patientUserId =
         requester.role === Role.PATIENT ? requester.id : other.id;
-      // BR-004 makes every visit hang off an appointment, so an appointment
-      // between the two IS the treating relationship.
-      const treating = await this.prisma.doctorProfile.findFirst({
-        where: {
-          userId: doctorUserId,
-          appointments: { some: { patient: { userId: patientUserId } } },
-        },
+      // Same "treating doctor" rule as record access (ConsentService).
+      const patient = await this.prisma.patientProfile.findUnique({
+        where: { userId: patientUserId },
         select: { id: true },
       });
-      if (treating) return;
+      if (
+        patient &&
+        (await this.consent.isTreatingDoctor(doctorUserId, patient.id))
+      ) {
+        return;
+      }
       throw new ForbiddenException(
         'Chat requires a treating relationship (book an appointment first).',
       );

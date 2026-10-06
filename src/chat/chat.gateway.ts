@@ -43,7 +43,8 @@ import { ChatService } from './chat.service';
  * Global guards do NOT apply to gateways — authentication happens on the
  * handshake here; every event handler re-checks room membership.
  */
-@WebSocketGateway({ cors: { origin: '*' } })
+// CORS comes from CorsIoAdapter (CORS_ORIGINS), same rule as REST.
+@WebSocketGateway()
 export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   private readonly logger = new Logger(ChatGateway.name);
 

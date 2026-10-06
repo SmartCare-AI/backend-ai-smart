@@ -8,6 +8,7 @@ import {
   OnModuleInit,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import {
   ConsentType,
   EmergencyEvent,
@@ -25,6 +26,7 @@ import {
 import { ConsentService } from '../consent/consent.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { SchedulerLockService } from '../prisma/scheduler-lock.service';
 import { QUEUES, QueueService } from '../queues/queue.service';
 import { ProfilesService } from '../users/profiles.service';
 import {
@@ -57,7 +59,10 @@ export interface OpenEmergencyInput {
  * EmergencyContact list in priority order. Acknowledging cancels the chain.
  *
  * The delayed job runs on the BullMQ 'escalations' queue when Redis is
- * available, otherwise an in-process timer (fine for dev/single instance).
+ * available, otherwise an in-process timer. Either can be lost (Redis down,
+ * server restart), so a once-a-minute sweeper re-checks the database and
+ * escalates anything overdue. escalate() claims the event atomically
+ * (escalatedAt), so whichever path fires first wins and SMS go out once.
  */
 @Injectable()
 export class EmergencyService implements OnModuleInit {
@@ -71,6 +76,7 @@ export class EmergencyService implements OnModuleInit {
     private readonly notifications: NotificationsService,
     private readonly queues: QueueService,
     private readonly config: ConfigService,
+    private readonly locks: SchedulerLockService,
     @Inject(SMS_PROVIDER) private readonly sms: SmsProvider,
   ) {
     this.escalationDelayMs =
@@ -280,8 +286,42 @@ export class EmergencyService implements OnModuleInit {
     }
   }
 
+  /**
+   * Safety net for lost timers/jobs: every minute, escalate ACTIVE events
+   * that are past the delay and were never escalated.
+   */
+  @Cron(CronExpression.EVERY_MINUTE)
+  async sweepOverdue(): Promise<void> {
+    try {
+      await this.locks.runExclusive('emergency-sweeper', 60_000, async () => {
+        const overdue = await this.prisma.emergencyEvent.findMany({
+          where: {
+            status: EmergencyStatus.ACTIVE,
+            escalatedAt: null,
+            createdAt: { lte: new Date(Date.now() - this.escalationDelayMs) },
+          },
+          select: { id: true },
+        });
+        for (const { id } of overdue) await this.escalate(id);
+      });
+    } catch (err) {
+      this.logger.error(`Emergency sweep failed: ${(err as Error).message}`);
+    }
+  }
+
   /** Fires after the delay: still ACTIVE → SMS the emergency contacts. */
-  private async escalate(emergencyEventId: number) {
+  async escalate(emergencyEventId: number) {
+    // Atomic claim: only one caller (queue job, timer or sweeper) proceeds.
+    const claimed = await this.prisma.emergencyEvent.updateMany({
+      where: {
+        id: emergencyEventId,
+        status: EmergencyStatus.ACTIVE,
+        escalatedAt: null,
+      },
+      data: { escalatedAt: new Date() },
+    });
+    if (claimed.count === 0) return;
+
     const event = await this.prisma.emergencyEvent.findUnique({
       where: { id: emergencyEventId },
       include: {
@@ -294,7 +334,7 @@ export class EmergencyService implements OnModuleInit {
         },
       },
     });
-    if (!event || event.status !== EmergencyStatus.ACTIVE) return;
+    if (!event) return;
 
     const name = fullName(event.patient);
     const location =

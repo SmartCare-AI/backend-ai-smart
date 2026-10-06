@@ -39,6 +39,11 @@ class EnvironmentVariables {
   @IsString()
   REDIS_URL?: string;
 
+  /** Comma-separated browser origins; empty = allow all (see cors.util.ts). */
+  @IsOptional()
+  @IsString()
+  CORS_ORIGINS?: string;
+
   @IsOptional()
   @IsString()
   MAIL_USER?: string;

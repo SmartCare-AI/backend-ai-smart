@@ -13,6 +13,11 @@ import {
   TreatmentPlanStatus,
 } from '@prisma/client';
 import type { AuthenticatedUser } from '../common/decorators/current-user.decorator';
+import {
+  DEFAULT_TIMEZONE,
+  localParts,
+  zonedTimeToUtc,
+} from '../common/utils/timezone.util';
 import { ConsentService } from '../consent/consent.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -27,8 +32,9 @@ import {
 } from './dto/treatment.dtos';
 
 /**
- * Intake hours per frequency — spread over waking hours, expressed in UTC
- * for MVP (the mobile app localizes display).
+ * Intake hours per frequency — spread over waking hours, in the PATIENT'S
+ * local time (PatientProfile.timezone). A "9:00" dose is due at 9:00 where
+ * the patient lives, including across daylight-saving changes.
  */
 const SLOT_HOURS: Record<number, number[]> = {
   1: [9],
@@ -185,6 +191,12 @@ export class TreatmentService {
       ConsentType.VIEW_RECORDS,
     );
 
+    const patient = await this.prisma.patientProfile.findUnique({
+      where: { id: plan.patientId },
+      select: { userId: true, timezone: true },
+    });
+    const timezone = patient?.timezone ?? DEFAULT_TIMEZONE;
+
     const prescription = await this.prisma.$transaction(async (tx) => {
       const created = await tx.prescription.create({
         data: {
@@ -211,7 +223,7 @@ export class TreatmentService {
         // The clever bit: one MedicineTracking row per scheduled intake.
         // These rows ARE the adherence data and drive the reminders.
         await tx.medicineTracking.createMany({
-          data: this.generateSchedule(item).map((scheduledTime) => ({
+          data: this.generateSchedule(item, timezone).map((scheduledTime) => ({
             prescriptionItemId: prescriptionItem.id,
             patientId: plan.patientId,
             scheduledTime,
@@ -221,10 +233,6 @@ export class TreatmentService {
       return created;
     });
 
-    const patient = await this.prisma.patientProfile.findUnique({
-      where: { id: plan.patientId },
-      select: { userId: true },
-    });
     if (patient) {
       await this.notifications.notify(patient.userId, {
         type: NotificationType.MEDICATION_REMINDER,
@@ -424,16 +432,25 @@ export class TreatmentService {
     return dose;
   }
 
-  private generateSchedule(item: PrescriptionItemDto): Date[] {
+  /** Doses start tomorrow (patient's local calendar) at the slot hours. */
+  private generateSchedule(
+    item: PrescriptionItemDto,
+    timezone: string,
+  ): Date[] {
     const hours = SLOT_HOURS[item.timesPerDay];
+    const today = localParts(new Date(), timezone);
     const dates: Date[] = [];
-    const start = new Date();
-    start.setUTCHours(0, 0, 0, 0);
     for (let day = 1; day <= item.durationDays; day++) {
       for (const hour of hours) {
+        // Day overflow (e.g. 32 Jan) is normalized by zonedTimeToUtc.
         dates.push(
-          new Date(
-            start.getTime() + day * 24 * 60 * 60 * 1000 + hour * 60 * 60 * 1000,
+          zonedTimeToUtc(
+            today.year,
+            today.month,
+            today.day + day,
+            hour,
+            0,
+            timezone,
           ),
         );
       }

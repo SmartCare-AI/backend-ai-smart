@@ -35,6 +35,8 @@ export class AiController {
       'The patient describes symptoms (Arabic or English); the engine returns a risk level, ' +
       'the most relevant specialty, red-flag warnings, and the reasoning behind them. ' +
       'The result is saved as an AI_INITIAL Assessment visible to the treating doctor. ' +
+      'A CRITICAL result also raises a CRITICAL alert that opens an emergency for the care circle (`emergencyAlertId`). ' +
+      '`doctorSearch` holds the filter to pass to `GET /doctors` to book the suggested specialty. ' +
       '**Assistive only — never a diagnosis.** Backed by an explainable rules engine today; ' +
       'the trained ML service (AI_SERVICE_URL) plugs into the same endpoint later.',
   })
@@ -54,6 +56,8 @@ export class AiController {
         advice:
           'Your answers suggest the neurology department. This is an assistive assessment, not a diagnosis — a doctor will evaluate you.',
         engine: 'rules',
+        emergencyAlertId: null,
+        doctorSearch: { specialization: 'neurology' },
         disclaimer:
           'Assistive assessment only — not a medical diagnosis. Always consult a doctor.',
       },

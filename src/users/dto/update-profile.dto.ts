@@ -12,6 +12,7 @@ import {
   MaxLength,
   Min,
 } from 'class-validator';
+import { IsTimeZone } from '../../common/validators/is-time-zone.validator';
 
 /**
  * Partial update of the caller's own account + role profile.
@@ -110,6 +111,15 @@ export class UpdateProfileDto {
   @IsString()
   @MaxLength(100)
   insuranceNumber?: string;
+
+  @ApiPropertyOptional({
+    example: 'Africa/Cairo',
+    description:
+      'PATIENT only. IANA time zone; medication doses are scheduled in this local time.',
+  })
+  @IsOptional()
+  @IsTimeZone()
+  timezone?: string;
 
   // --- Patient & caregiver --------------------------------------------------
 

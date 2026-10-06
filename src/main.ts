@@ -6,6 +6,8 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
 import { resolve } from 'path';
 import { AppModule } from './app.module';
+import { CorsIoAdapter } from './common/adapters/cors-io.adapter';
+import { corsOrigin } from './common/utils/cors.util';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
@@ -18,9 +20,17 @@ async function bootstrap() {
   app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
   // Behind nginx: use X-Forwarded-For so rate limiting sees the real client IP.
   app.set('trust proxy', 1);
-  // CORS open to every origin for now (graduation project; Flutter web runs
-  // on a random localhost port). Restrict to known origins before going public.
-  app.enableCors({ origin: true, credentials: true });
+  // CORS: CORS_ORIGINS empty → every origin (dev / Flutter web on a random
+  // localhost port). Set a comma-separated allow-list (wildcards allowed)
+  // before going public. Socket.IO uses the same rule via CorsIoAdapter.
+  const corsOrigins = config.get<string>('CORS_ORIGINS');
+  if (!corsOrigins && config.get<string>('NODE_ENV') === 'production') {
+    logger.warn(
+      'CORS_ORIGINS is empty — every browser origin is allowed. Set an allow-list before going public.',
+    );
+  }
+  app.enableCors({ origin: corsOrigin(corsOrigins), credentials: true });
+  app.useWebSocketAdapter(new CorsIoAdapter(app, corsOrigin(corsOrigins)));
 
   // --- Validation: strip unknown fields, reject extras, auto-transform ---
   app.useGlobalPipes(

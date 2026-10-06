@@ -93,6 +93,7 @@ export class UsersService {
         ...(dto.insuranceNumber !== undefined && {
           insuranceNumber: dto.insuranceNumber,
         }),
+        ...(dto.timezone !== undefined && { timezone: dto.timezone }),
       };
       if (Object.keys(data).length > 0) {
         writes.push(

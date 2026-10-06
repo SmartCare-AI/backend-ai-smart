@@ -4,9 +4,12 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import {
+  AppointmentStatus,
   CareLinkStatus,
   ConsentStatus,
   ConsentType,
+  Prisma,
+  ProfileStatus,
   Role,
 } from '@prisma/client';
 import type { AuthenticatedUser } from '../common/decorators/current-user.decorator';
@@ -21,16 +24,67 @@ import { PrismaService } from '../prisma/prisma.service';
  * Access matrix:
  *  - ADMIN                → always
  *  - the patient themself → always
- *  - DOCTOR               → only with a treating relationship. Since BR-004
- *                            makes every Visit hang off an Appointment, an
- *                            appointment with the patient IS the relationship.
+ *  - DOCTOR               → only with a CURRENT treating relationship: a
+ *                            confirmed or completed appointment within the
+ *                            care window (12 months). Cancelled or pending
+ *                            bookings and long-past care grant nothing, and a
+ *                            suspended doctor loses access.
  *  - CAREGIVER            → only with an active PatientCaregiver link
  *                            (BR-003) or an explicit Consent row covering the
  *                            needed type
  */
+/** How long a confirmed/completed appointment keeps a doctor "treating". */
+export const CARE_WINDOW_MONTHS = 12;
+
+/** Appointment states that prove the doctor accepted the patient. */
+const TREATING_APPOINTMENT_STATUSES: AppointmentStatus[] = [
+  AppointmentStatus.CONFIRMED,
+  AppointmentStatus.COMPLETED,
+];
+
 @Injectable()
 export class ConsentService {
   constructor(private readonly prisma: PrismaService) {}
+
+  /**
+   * The single definition of "treating doctor" — used by the access gate,
+   * the care circle (alert/emergency recipients), chat and the alert center.
+   */
+  treatingAppointmentWhere(): Prisma.AppointmentWhereInput {
+    const windowStart = new Date();
+    windowStart.setMonth(windowStart.getMonth() - CARE_WINDOW_MONTHS);
+    return {
+      status: { in: TREATING_APPOINTMENT_STATUSES },
+      startTime: { gte: windowStart },
+    };
+  }
+
+  /** Does this doctor (by user id) currently treat this patient profile? */
+  async isTreatingDoctor(
+    doctorUserId: number,
+    patientProfileId: number,
+  ): Promise<boolean> {
+    const treating = await this.prisma.doctorProfile.findFirst({
+      where: {
+        userId: doctorUserId,
+        status: ProfileStatus.ACTIVE,
+        appointments: {
+          some: { patientId: patientProfileId, ...this.treatingAppointmentWhere() },
+        },
+      },
+      select: { id: true },
+    });
+    return !!treating;
+  }
+
+  /** Patient profile ids this doctor (by profile id) currently treats. */
+  treatedPatientsWhere(doctorProfileId: number): Prisma.PatientProfileWhereInput {
+    return {
+      appointments: {
+        some: { doctorId: doctorProfileId, ...this.treatingAppointmentWhere() },
+      },
+    };
+  }
 
   async assertCanAccessPatient(
     requester: Pick<AuthenticatedUser, 'id' | 'role'>,
@@ -48,14 +102,7 @@ export class ConsentService {
     if (patient.userId === requester.id) return;
 
     if (requester.role === Role.DOCTOR) {
-      const treating = await this.prisma.doctorProfile.findFirst({
-        where: {
-          userId: requester.id,
-          appointments: { some: { patientId: patient.id } },
-        },
-        select: { id: true },
-      });
-      if (treating) return;
+      if (await this.isTreatingDoctor(requester.id, patient.id)) return;
       throw new ForbiddenException(
         'You are not a treating doctor for this patient.',
       );
@@ -85,7 +132,12 @@ export class ConsentService {
   async patientCircleUserIds(patientId: number): Promise<number[]> {
     const [doctors, links] = await Promise.all([
       this.prisma.doctorProfile.findMany({
-        where: { appointments: { some: { patientId } } },
+        where: {
+          status: ProfileStatus.ACTIVE,
+          appointments: {
+            some: { patientId, ...this.treatingAppointmentWhere() },
+          },
+        },
         select: { userId: true },
       }),
       this.prisma.patientCaregiver.findMany({
