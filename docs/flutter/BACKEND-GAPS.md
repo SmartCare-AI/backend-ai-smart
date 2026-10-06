@@ -1,5 +1,11 @@
 # Backend gaps that block the Flutter team
 
+> **Status (6 Oct 2026):** B-01 ✅ done (Family Portal API), B-02 ✅ for
+> caregivers (they join by invitation; HOSPITAL_ADMIN is out of MVP scope),
+> B-03 ✅ done (`GET /doctors/me/patients`), B-04 and B-05 moved to Graduation
+> Project 2 (hospitals skipped). Details:
+> [BACKEND-CHANGES-MVP.md](BACKEND-CHANGES-MVP.md).
+
 Found while mapping the 112 existing endpoints against the four surfaces.
 These are **backend tasks**, not Flutter tasks. B-01 and B-02 are hard blockers
 for the Family Portal and the Hospital Dashboard — schedule them in week 1.

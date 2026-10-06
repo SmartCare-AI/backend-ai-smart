@@ -60,6 +60,12 @@ with `flutter run -d chrome`. Do not create separate repos or separate projects.
 
 ## 2. Backend work that must happen first
 
+> **Update (6 Oct 2026):** the MVP backend Phases 0–3 shipped. Doctor
+> self-registration, the doctor directory, the Family Portal API (B-01, B-02
+> for caregivers) and "my patients" (B-03) are live. **Read
+> [BACKEND-CHANGES-MVP.md](BACKEND-CHANGES-MVP.md)**: it lists every new
+> endpoint and the breaking changes.
+
 Three things the Flutter team **cannot** build until the backend adds them.
 They are small (about 1 day total) but they are hard blockers — see
 [BACKEND-GAPS.md](BACKEND-GAPS.md) for the detail.

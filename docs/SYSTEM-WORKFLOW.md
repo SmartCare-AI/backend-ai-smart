@@ -800,6 +800,24 @@ sequenceDiagram
 
 ## 19. MVP delivery plan (GP1) and what moves to GP2
 
+> **Progress (6 Oct 2026):** Phases 0, 1, 2 and 3 are ✅ done and covered by
+> end-to-end tests (`npm run test:e2e`). Frontend handoff:
+> [flutter/BACKEND-CHANGES-MVP.md](flutter/BACKEND-CHANGES-MVP.md).
+> Implementation notes that differ from the plan below:
+> - Phase 0: production without Redis logs a loud warning instead of failing
+>   to boot. The database sweeper already guarantees emergency SMS, and a
+>   hard failure would have broken the current server on redeploy.
+> - Phase 0: `CORS_ORIGINS` empty still allows every origin (deliberate,
+>   matches the existing setup); set it to lock down.
+> - Phase 2: invitations are matched by the invitee's email inside the app
+>   (`GET /invitations/my`) instead of an emailed token.
+> - Phase 2: a caregiver needs an active link for any access; extra consents
+>   only add permissions on top of it.
+> - Phase 5 will use an *active role* the user switches (`User.role`), not a
+>   role list checked per request.
+>
+> **Next:** Phase 4 (scheduling), then 5 (stretch) and 6.
+
 **Goal of GP1:** one complete, reliable journey that can be demoed end to end
 without workarounds: *a patient and a doctor sign up → the patient finds and
 books the doctor → visit → prescription → reminders → vitals → alert →
