@@ -81,7 +81,7 @@ live on the role profile, and every user payload now carries a resolved
 
 - `POST /auth/register` still takes `firstName`/`lastName` — they are written to
   the patient profile it creates.
-- `PATCH /users/me` routes each field to the right place: `phone` to the account,
+- `PATCH /users/me` routes each field to the right place: `phone` and `age` to the account,
   everything else to the caller's profile. Fields that do not apply to the
   caller's role are ignored.
 - `POST /users/{id}/doctor-profile` accepts `firstName`/`lastName`; when omitted
@@ -187,7 +187,7 @@ Each is annotated in `prisma/schema.prisma` at the model it affects.
 | `VitalSign.value` / `DeviceReading.value` are `DOUBLE`, not VARCHAR | Thresholds, trends and time-series charts need a numeric type. The dictionary §5 explicitly allows adapting types to the DBMS. |
 | `ConsentType` reused as `PatientCaregiver.permissionLevel` | One comparable permission vocabulary for both a caregiver link and an explicit consent row, instead of two identical enums. |
 | `RiskLevel` used for `Alert.severity` | Same four-level scale as `Assessment.RiskLevel`, so triage, thresholds and alerts stay directly comparable. `MODERATE` is this schema's spelling of the dictionary's "Medium". |
-| `User.phone` / `User.avatarUrl` kept on the account | Account-level contact/presentation data shared by every role; keeping one copy avoids duplicating the ERD's `Caregiver.Phone` across three profiles. |
+| `User.phone` / `User.age` / `User.avatarUrl` kept on the account | Account-level contact/presentation data shared by every role; keeping one copy avoids duplicating the ERD's `Caregiver.Phone` across three profiles. |
 | `Appointment.bookedById` | Not in the ERD, but the caregiver booking flow (FR-006/FR-007) needs an auditable "who booked this". |
 | `Alert.source`, `MedicineTracking.reminderSentAt` | Operational columns for alert de-duplication and reminder idempotency. |
 

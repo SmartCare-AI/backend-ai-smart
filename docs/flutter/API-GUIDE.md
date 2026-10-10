@@ -28,7 +28,7 @@ a debug flavor. Handle it in F-01.
 ### The flow
 
 ```
-POST /auth/register   {email,password,firstName,lastName,phone?}  -> {message}   (6-digit code emailed)
+POST /auth/register   {email,password,firstName,lastName,phone?,age?}  -> {message}   (6-digit code emailed)
 POST /auth/verify-email {email, code}                             -> AuthResponse
 POST /auth/login      {email, password}                           -> AuthResponse
 POST /auth/refresh    {refreshToken}                              -> AuthResponse  (rotates!)
@@ -94,6 +94,7 @@ not exist**. Read `fullName`, or the matching profile.
   "email": "patient@shifaa.dev",
   "fullName": "Omar Youssef",          // always present, safe to render
   "phone": "+201001110002",
+  "age": 28,                            // optional, null when not provided
   "avatarUrl": null,
   "role": "PATIENT",                    // drives which shell to open
   "status": "ACTIVE",
