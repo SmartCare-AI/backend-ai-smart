@@ -54,12 +54,13 @@ export class UsersService {
 
     const writes: Prisma.PrismaPromise<unknown>[] = [];
 
-    if (dto.phone !== undefined) {
+    const account: Prisma.UserUpdateInput = {
+      ...(dto.phone !== undefined && { phone: dto.phone }),
+      ...(dto.age !== undefined && { age: dto.age }),
+    };
+    if (Object.keys(account).length > 0) {
       writes.push(
-        this.prisma.user.update({
-          where: { id: userId },
-          data: { phone: dto.phone },
-        }),
+        this.prisma.user.update({ where: { id: userId }, data: account }),
       );
     }
 

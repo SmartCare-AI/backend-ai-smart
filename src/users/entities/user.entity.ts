@@ -40,6 +40,13 @@ export class UserEntity {
   phone!: string | null;
 
   @ApiPropertyOptional({
+    example: 28,
+    nullable: true,
+    description: 'Age in years.',
+  })
+  age!: number | null;
+
+  @ApiPropertyOptional({
     example: 'https://cdn.shifaa.ai/avatars/omar.png',
     nullable: true,
   })

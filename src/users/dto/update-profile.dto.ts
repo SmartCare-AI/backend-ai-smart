@@ -17,7 +17,7 @@ import { IsTimeZone } from '../../common/validators/is-time-zone.validator';
 /**
  * Partial update of the caller's own account + role profile.
  *
- * Account-level fields (phone) go to `users`; identity and role-specific
+ * Account-level fields (phone, age) go to `users`; identity and role-specific
  * fields go to the matching profile entity — fields that do not apply to the
  * caller's role are ignored.
  */
@@ -49,6 +49,18 @@ export class UpdateProfileDto {
     message: 'phone must be a valid number in E.164 format (e.g. +2010...)',
   })
   phone?: string;
+
+  @ApiPropertyOptional({
+    example: 28,
+    minimum: 0,
+    maximum: 150,
+    description: 'Age in years. Stored on the account.',
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(150)
+  age?: number;
 
   // --- Patient profile ------------------------------------------------------
 

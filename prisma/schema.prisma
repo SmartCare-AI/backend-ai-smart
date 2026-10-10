@@ -503,6 +503,8 @@ model User {
   /// ERD PasswordHash. Null for social-login accounts (Google / Apple).
   password        String?
   phone           String?
+  /// Optional self-reported age in years.
+  age             Int?
   avatarUrl       String?
   role            Role         @default(PATIENT)
   status          UserStatus   @default(ACTIVE)
@@ -1434,4 +1436,3 @@ model SchedulerLock {
 
   @@map("scheduler_locks")
 }
-

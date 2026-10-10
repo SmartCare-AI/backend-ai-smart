@@ -4,12 +4,15 @@ import {
   IsDefined,
   IsEmail,
   IsIn,
+  IsInt,
   IsNotEmpty,
   IsOptional,
   IsPhoneNumber,
   IsString,
   Matches,
+  Max,
   MaxLength,
+  Min,
   MinLength,
   ValidateIf,
   ValidateNested,
@@ -64,6 +67,18 @@ export class RegisterDto {
     message: 'phone must be a valid number in E.164 format (e.g. +2010...)',
   })
   phone?: string;
+
+  @ApiPropertyOptional({
+    example: 28,
+    minimum: 0,
+    maximum: 150,
+    description: 'Age in years.',
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(150)
+  age?: number;
 
   @ApiPropertyOptional({
     enum: SELF_SERVICE_ACCOUNT_TYPES,

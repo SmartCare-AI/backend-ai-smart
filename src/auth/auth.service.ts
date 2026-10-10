@@ -92,10 +92,21 @@ export class AuthService {
       const account = existing
         ? await tx.user.update({
             where: { id: existing.id },
-            data: { password, phone: dto.phone ?? null, role },
+            data: {
+              password,
+              phone: dto.phone ?? null,
+              age: dto.age ?? null,
+              role,
+            },
           })
         : await tx.user.create({
-            data: { email, password, phone: dto.phone ?? null, role },
+            data: {
+              email,
+              password,
+              phone: dto.phone ?? null,
+              age: dto.age ?? null,
+              role,
+            },
           });
       if (existing) {
         await tx.patientProfile.deleteMany({ where: { userId: account.id } });
